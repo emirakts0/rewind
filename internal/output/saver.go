@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
+	hiddenexec "rewind/internal/hardware"
 )
 
 type Saver struct {
@@ -73,7 +73,7 @@ func (s *Saver) saveAsync(data []byte, opts *SaveOptions) {
 		absTs, _ := filepath.Abs(tsPath)
 		absMp4, _ := filepath.Abs(mp4Path)
 
-		cmd := exec.Command(s.ffmpegPath, "-y", "-i", absTs, "-c", "copy", absMp4)
+		cmd := hiddenexec.Command(s.ffmpegPath, "-y", "-i", absTs, "-c", "copy", absMp4)
 		if err := cmd.Run(); err == nil {
 			slog.Info("clip saved", "path", mp4Path)
 			if opts.DeleteTS {

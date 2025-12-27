@@ -1,131 +1,101 @@
 package main
 
 import (
-	"fmt"
-	"log/slog"
+	"context"
+	"embed"
+	"log"
 	"os"
-	"time"
+	"path/filepath"
 
-	"rewind/internal/buffer"
-	"rewind/internal/capture"
-	"rewind/internal/display"
-	"rewind/internal/gpu"
-	"rewind/internal/output"
-	"rewind/internal/system"
+	"rewind/internal/app"
+	"rewind/internal/logging"
 
-	gohook "github.com/robotn/gohook"
+	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/options"
+	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
-const (
-	DefaultFPS           = 60
-	DefaultBitrate       = "15M"
-	DefaultRecordSeconds = 30
-	DefaultOutputDir     = "./clips"
-	FFmpegPath           = "bin/ffmpeg.exe"
-)
+//go:embed all:frontend/dist
+var assets embed.FS
+
+func getFFmpegPath() string {
+	// Try to find ffmpeg relative to the executable
+	exePath, err := os.Executable()
+	if err == nil {
+		exeDir := filepath.Dir(exePath)
+		// Check in same directory as executable
+		ffmpegPath := filepath.Join(exeDir, "ffmpeg.exe")
+		if _, err := os.Stat(ffmpegPath); err == nil {
+			return ffmpegPath
+		}
+		// Check in bin subdirectory
+		ffmpegPath = filepath.Join(exeDir, "bin", "ffmpeg.exe")
+		if _, err := os.Stat(ffmpegPath); err == nil {
+			return ffmpegPath
+		}
+	}
+
+	// Fallback: check working directory
+	if _, err := os.Stat("bin/ffmpeg.exe"); err == nil {
+		return "bin/ffmpeg.exe"
+	}
+	if _, err := os.Stat("ffmpeg.exe"); err == nil {
+		return "ffmpeg.exe"
+	}
+
+	// Last resort: hope it's in PATH
+	return "ffmpeg"
+}
 
 func main() {
-	gpu.FFmpegPath = FFmpegPath
-	display.FFmpegPath = FFmpegPath
-
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	})))
-
-	slog.Info("Rewind - Screen Replay System")
-	slog.Info("detecting system configuration")
-
-	sysInfo, err := system.Detect()
-	if err != nil {
-		slog.Error("failed to detect system", "error", err)
-		os.Exit(1)
+	// Setup logging
+	logPath := logging.GetLogPath()
+	if err := logging.Setup(logPath, true); err != nil {
+		log.Printf("Failed to setup logging: %v", err)
 	}
+	defer logging.Close()
 
-	sysInfo.Print()
+	ffmpegPath := getFFmpegPath()
+	log.Printf("Using FFmpeg: %s", ffmpegPath)
 
-	if len(sysInfo.Displays) == 0 {
-		slog.Error("no displays found")
-		os.Exit(1)
-	}
+	// Create app instance
+	rewindApp := app.New(ffmpegPath)
 
-	selectedDisplay := sysInfo.SelectBestDisplay()
-	if selectedDisplay == nil {
-		slog.Error("could not select a display")
-		os.Exit(1)
-	}
-
-	cfg, err := sysInfo.CreateCaptureConfig(selectedDisplay.Index)
-	if err != nil {
-		slog.Error("failed to create capture config", "error", err)
-		os.Exit(1)
-	}
-
-	cfg.FPS = DefaultFPS
-	cfg.Bitrate = DefaultBitrate
-	cfg.RecordSeconds = DefaultRecordSeconds
-	cfg.OutputDir = DefaultOutputDir
-	cfg.FFmpegPath = FFmpegPath
-
-	encoderName := "CPU (libx264)"
-	if cfg.Encoder != nil {
-		encoderName = cfg.Encoder.Name
-	}
-
-	slog.Info("capture configuration",
-		"display", fmt.Sprintf("[%d] %dx%d", cfg.Display.Index, cfg.Display.Width, cfg.Display.Height),
-		"gpu", cfg.CaptureGPU.Name,
-		"encoder", encoderName,
-		"fps", cfg.FPS,
-		"bitrate", cfg.Bitrate,
-		"buffer_seconds", cfg.RecordSeconds,
-	)
-
-	os.MkdirAll(cfg.OutputDir, os.ModePerm)
-
-	bufSize := capture.CalculateBufferSize(cfg.Bitrate, cfg.RecordSeconds)
-	rb := buffer.NewRing(bufSize)
-	saver := output.NewSaver(cfg.FFmpegPath, cfg.OutputDir)
-
-	capturer, err := capture.NewCapturer(cfg)
-	if err != nil {
-		slog.Error("failed to create capturer", "error", err)
-		os.Exit(1)
-	}
-
-	capturer.OnData = func(data []byte) {
-		rb.Write(data)
-	}
-
-	capturer.OnError = func(err error) {
-		slog.Warn("capture error", "error", err)
-	}
-
-	slog.Info("starting capture")
-	if err := capturer.Start(); err != nil {
-		slog.Error("failed to start capture", "error", err)
-		os.Exit(1)
-	}
-
-	slog.Info("recording active", "hotkey", "F10", "buffer_seconds", cfg.RecordSeconds)
-
-	evChan := gohook.Start()
-	defer gohook.End()
-
-	lastSave := time.Time{}
-	for ev := range evChan {
-		if ev.Kind == gohook.KeyDown && ev.Rawcode == 121 {
-			if time.Since(lastSave) < 3*time.Second {
-				continue
-			}
-			lastSave = time.Now()
-
-			filename := fmt.Sprintf("clip_%s", lastSave.Format("20060102_150405"))
-			slog.Info("saving clip", "filename", filename)
-
-			opts := output.DefaultSaveOptions(filename)
-			if err := saver.Save(rb, opts); err != nil {
-				slog.Error("failed to save clip", "error", err)
-			}
+	// Set startup callback
+	rewindApp.OnStartup = func(ctx context.Context) {
+		if err := rewindApp.Initialize(); err != nil {
+			log.Printf("Failed to initialize: %v", err)
 		}
+	}
+
+	err := wails.Run(&options.App{
+		Title:         "Rewind",
+		Width:         420,
+		Height:        750,
+		MinWidth:      420,
+		MinHeight:     750,
+		MaxWidth:      420,
+		MaxHeight:     750,
+		DisableResize: true,
+		Frameless:     false,
+		AssetServer: &assetserver.Options{
+			Assets: assets,
+		},
+		BackgroundColour: &options.RGBA{R: 15, G: 15, B: 20, A: 255},
+		OnStartup:        rewindApp.Startup,
+		OnShutdown:       rewindApp.Shutdown,
+		Bind: []interface{}{
+			rewindApp,
+		},
+		Windows: &windows.Options{
+			WebviewIsTransparent: false,
+			WindowIsTranslucent:  false,
+			DisableWindowIcon:    false,
+		},
+	})
+
+	if err != nil {
+		log.Fatal(err)
 	}
 }

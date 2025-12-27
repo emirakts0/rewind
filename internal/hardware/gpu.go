@@ -1,27 +1,27 @@
 //go:build windows
 
-package gpu
+package hardware
 
 import (
-	"os/exec"
 	"regexp"
 	"strings"
 )
 
 // DetectGPUs returns a list of all GPUs in the system.
-// Uses FFmpeg to detect available hardware encoders and infers GPU presence.
 func DetectGPUs() (GPUList, error) {
-	return detectGPUsFromDXDiag()
+	gpus, err := detectGPUsFromWMIC()
+	if err != nil || len(gpus) == 0 {
+		return detectGPUsFromEncoders()
+	}
+	return gpus, nil
 }
 
-// detectGPUsFromDXDiag uses Windows built-in tools to get GPU info.
-func detectGPUsFromDXDiag() (GPUList, error) {
-	// Use wmic to get GPU information
-	cmd := exec.Command("wmic", "path", "win32_videocontroller", "get", "name,adapterram,pnpdeviceid", "/format:csv")
+// detectGPUsFromWMIC uses Windows WMI to get GPU information.
+func detectGPUsFromWMIC() (GPUList, error) {
+	cmd := Command("wmic", "path", "win32_videocontroller", "get", "name,adapterram,pnpdeviceid", "/format:csv")
 	out, err := cmd.Output()
 	if err != nil {
-		// Fallback to encoder-based detection
-		return detectGPUsFromEncoders()
+		return nil, err
 	}
 
 	var gpus GPUList
@@ -42,7 +42,6 @@ func detectGPUsFromDXDiag() (GPUList, error) {
 		// CSV format: Node,AdapterRAM,Name,PNPDeviceID
 		vramStr := strings.TrimSpace(parts[1])
 		name := strings.TrimSpace(parts[2])
-		pnpID := strings.TrimSpace(parts[3])
 
 		if name == "" || name == "Name" {
 			continue
@@ -62,16 +61,12 @@ func detectGPUsFromDXDiag() (GPUList, error) {
 			Name:         name,
 			Vendor:       vendor,
 			VRAM:         vram,
-			IsIntegrated: isIntegratedFromPNP(pnpID, vendor, vram, name),
+			IsIntegrated: detectIsIntegrated(vendor, name, vram),
 			Encoders:     getEncodersForVendor(vendor),
 		}
 
 		gpus = append(gpus, gpu)
 		idx++
-	}
-
-	if len(gpus) == 0 {
-		return detectGPUsFromEncoders()
 	}
 
 	return gpus, nil
@@ -80,18 +75,20 @@ func detectGPUsFromDXDiag() (GPUList, error) {
 func detectVendorFromName(name string) Vendor {
 	nameLower := strings.ToLower(name)
 	switch {
-	case strings.Contains(nameLower, "nvidia") || strings.Contains(nameLower, "geforce") || strings.Contains(nameLower, "rtx") || strings.Contains(nameLower, "gtx"):
+	case strings.Contains(nameLower, "nvidia") || strings.Contains(nameLower, "geforce") ||
+		strings.Contains(nameLower, "rtx") || strings.Contains(nameLower, "gtx"):
 		return VendorNVIDIA
-	case strings.Contains(nameLower, "amd") || strings.Contains(nameLower, "radeon") || strings.Contains(nameLower, "rx "):
+	case strings.Contains(nameLower, "amd") || strings.Contains(nameLower, "radeon") ||
+		strings.Contains(nameLower, "rx "):
 		return VendorAMD
-	case strings.Contains(nameLower, "intel") || strings.Contains(nameLower, "iris") || strings.Contains(nameLower, "uhd"):
+	case strings.Contains(nameLower, "intel") || strings.Contains(nameLower, "iris") ||
+		strings.Contains(nameLower, "uhd"):
 		return VendorIntel
 	}
 	return VendorUnknown
 }
 
 func parseVRAM(vramStr string) uint64 {
-	// Remove any non-numeric characters
 	re := regexp.MustCompile(`[0-9]+`)
 	match := re.FindString(vramStr)
 	if match == "" {
@@ -105,37 +102,28 @@ func parseVRAM(vramStr string) uint64 {
 	return vram
 }
 
-func isIntegratedFromPNP(pnpID string, vendor Vendor, vram uint64, name string) bool {
+func detectIsIntegrated(vendor Vendor, name string, vram uint64) bool {
 	nameLower := strings.ToLower(name)
 
-	// Intel GPUs are almost always integrated (except Arc)
+	// Intel: integrated unless Arc
 	if vendor == VendorIntel {
-		if strings.Contains(nameLower, "arc") {
-			return false
-		}
-		return true
+		return !strings.Contains(nameLower, "arc")
 	}
 
-	// AMD APUs (integrated graphics)
+	// AMD APU detection
 	if vendor == VendorAMD {
-		// "Radeon Graphics" or "Radeon(TM) Graphics" without RX model = integrated APU
-		if (strings.Contains(nameLower, "radeon graphics") || strings.Contains(nameLower, "radeon(tm) graphics")) &&
-			!strings.Contains(nameLower, "rx") {
+		if strings.Contains(nameLower, "radeon graphics") ||
+			strings.Contains(nameLower, "radeon(tm) graphics") {
 			return true
 		}
-		// Vega integrated
 		if strings.Contains(nameLower, "vega") && !strings.Contains(nameLower, "rx vega") {
 			return true
 		}
-		// Very low VRAM usually indicates integrated (APU shares system RAM)
-		// Integrated AMD GPUs often report 512MB or less dedicated VRAM
+		// Very low VRAM = APU
 		if vram > 0 && vram <= 512*1024*1024 {
 			return true
 		}
 	}
-
-	// NVIDIA doesn't have integrated GPUs in consumer laptops
-	// (they use Optimus with Intel/AMD iGPU)
 
 	return false
 }
@@ -161,7 +149,7 @@ func getEncodersForVendor(vendor Vendor) []Encoder {
 	return nil
 }
 
-// detectGPUsFromEncoders is a fallback when other methods fail.
+// detectGPUsFromEncoders is a fallback when WMI fails.
 func detectGPUsFromEncoders() (GPUList, error) {
 	var gpus GPUList
 	encoders := DetectAvailableEncoders()
@@ -211,7 +199,6 @@ func detectGPUsFromEncoders() (GPUList, error) {
 		})
 	}
 
-	// If nothing detected, add a placeholder for CPU encoding
 	if len(gpus) == 0 {
 		gpus = append(gpus, &GPU{
 			Index:  0,

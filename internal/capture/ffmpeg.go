@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"rewind/internal/gpu"
+	"rewind/internal/hardware"
 )
 
 type FFmpegCommandBuilder struct {
@@ -26,12 +26,13 @@ func (b *FFmpegCommandBuilder) BuildArgs() []string {
 }
 
 func (b *FFmpegCommandBuilder) getHWDeviceArgs() []string {
-	if b.config.CaptureGPU == nil {
+	gpu := b.config.GPU()
+	if gpu == nil {
 		return nil
 	}
 
-	switch b.config.CaptureGPU.Vendor {
-	case gpu.VendorAMD, gpu.VendorIntel, gpu.VendorNVIDIA:
+	switch gpu.Vendor {
+	case hardware.VendorAMD, hardware.VendorIntel, hardware.VendorNVIDIA:
 		return []string{
 			"-init_hw_device", "d3d11va=d3d11",
 			"-filter_hw_device", "d3d11",
@@ -46,9 +47,10 @@ func (b *FFmpegCommandBuilder) getInputArgs() []string {
 		drawMouse = 1
 	}
 
+	display := b.config.Display()
 	outputIdx := 0
-	if b.config.Display != nil {
-		outputIdx = b.config.Display.Index
+	if display != nil {
+		outputIdx = display.Index
 	}
 
 	return []string{
@@ -60,16 +62,19 @@ func (b *FFmpegCommandBuilder) getInputArgs() []string {
 }
 
 func (b *FFmpegCommandBuilder) getEncoderArgs() []string {
-	if b.config.Encoder == nil {
-		return gpu.CPUEncoderArgs()
+	encoder := b.config.Encoder()
+	gpu := b.config.GPU()
+
+	if encoder == nil || encoder.Name == "libx264" {
+		return hardware.CPUEncoderArgs()
 	}
 
-	captureVendor := gpu.VendorUnknown
-	if b.config.CaptureGPU != nil {
-		captureVendor = b.config.CaptureGPU.Vendor
+	captureVendor := hardware.VendorUnknown
+	if gpu != nil {
+		captureVendor = gpu.Vendor
 	}
 
-	return gpu.GetEncoderArgs(b.config.Encoder, captureVendor)
+	return hardware.GetEncoderArgs(encoder, captureVendor)
 }
 
 func (b *FFmpegCommandBuilder) getOutputArgs() []string {

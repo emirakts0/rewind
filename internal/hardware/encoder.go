@@ -1,26 +1,24 @@
-package gpu
+package hardware
 
 import (
-	"os/exec"
+	"log/slog"
 	"strings"
 )
 
-// FFmpegPath is the path to the FFmpeg executable.
-// This should be set by the application at startup.
-var FFmpegPath = "bin/ffmpeg.exe"
-
 // DetectAvailableEncoders returns a list of available hardware encoders.
 func DetectAvailableEncoders() []string {
-	cmd := exec.Command(FFmpegPath, "-hide_banner", "-encoders")
+	slog.Debug("detecting encoders", "ffmpegPath", FFmpegPath)
+
+	cmd := Command(FFmpegPath, "-hide_banner", "-encoders")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
+		slog.Warn("ffmpeg encoder detection failed", "error", err, "output", string(out))
 		return nil
 	}
 
 	output := string(out)
 	var encoders []string
 
-	// Hardware encoders we care about
 	hwEncoders := []string{
 		"h264_nvenc", "hevc_nvenc", // NVIDIA
 		"h264_amf", "hevc_amf", // AMD
@@ -30,9 +28,11 @@ func DetectAvailableEncoders() []string {
 	for _, enc := range hwEncoders {
 		if strings.Contains(output, enc) {
 			encoders = append(encoders, enc)
+			slog.Debug("found encoder", "name", enc)
 		}
 	}
 
+	slog.Info("detected encoders", "count", len(encoders), "encoders", encoders)
 	return encoders
 }
 
@@ -55,13 +55,7 @@ func ValidateEncoders(gpus GPUList) {
 // GetEncoderArgs returns FFmpeg arguments for a specific encoder.
 func GetEncoderArgs(encoder *Encoder, captureVendor Vendor) []string {
 	if encoder == nil {
-		// CPU fallback
-		return []string{
-			"-vf", "hwdownload,format=bgra,format=nv12",
-			"-c:v", "libx264",
-			"-preset", "ultrafast",
-			"-tune", "zerolatency",
-		}
+		return CPUEncoderArgs()
 	}
 
 	switch encoder.Name {
@@ -77,7 +71,6 @@ func GetEncoderArgs(encoder *Encoder, captureVendor Vendor) []string {
 }
 
 func getAMFEncoderArgs(encoder *Encoder) []string {
-	// AMD AMF - optimal for ddagrab (same GPU, no transfer)
 	return []string{
 		"-vf", "scale_d3d11=format=nv12",
 		"-c:v", encoder.Name,
@@ -88,8 +81,6 @@ func getAMFEncoderArgs(encoder *Encoder) []string {
 }
 
 func getNVENCEncoderArgs(encoder *Encoder, captureVendor Vendor) []string {
-	// NVIDIA NVENC
-	// If capture is from a different GPU, we need hwdownload first
 	if captureVendor != VendorNVIDIA {
 		return []string{
 			"-vf", "hwdownload,format=bgra,hwupload_cuda,scale_cuda=format=nv12",
@@ -101,7 +92,6 @@ func getNVENCEncoderArgs(encoder *Encoder, captureVendor Vendor) []string {
 		}
 	}
 
-	// Same GPU capture and encode
 	return []string{
 		"-vf", "hwmap=derive_device=cuda,scale_cuda=format=nv12",
 		"-c:v", encoder.Name,
@@ -113,7 +103,6 @@ func getNVENCEncoderArgs(encoder *Encoder, captureVendor Vendor) []string {
 }
 
 func getQSVEncoderArgs(encoder *Encoder) []string {
-	// Intel QuickSync
 	return []string{
 		"-vf", "hwmap=derive_device=qsv,format=qsv,scale_qsv=format=nv12",
 		"-c:v", encoder.Name,

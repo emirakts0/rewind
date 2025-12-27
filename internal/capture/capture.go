@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	hiddenexec "rewind/internal/hardware"
 	"sync"
 )
 
@@ -37,7 +38,7 @@ func (c *Capturer) Start() error {
 	builder := NewFFmpegCommandBuilder(c.config)
 	args := builder.BuildArgs()
 
-	c.cmd = exec.Command(c.config.FFmpegPath, args...)
+	c.cmd = hiddenexec.Command(c.config.FFmpegPath, args...)
 
 	var err error
 	c.stdout, err = c.cmd.StdoutPipe()
