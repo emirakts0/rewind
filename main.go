@@ -50,7 +50,7 @@ func getFFmpegPath() string {
 
 func main() {
 	// Setup logging
-	logPath := logging.GetLogPath()
+	logPath := logging.GetDefaultLogPath()
 	if err := logging.Setup(logPath, true); err != nil {
 		log.Printf("Failed to setup logging: %v", err)
 	}

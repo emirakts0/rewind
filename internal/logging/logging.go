@@ -15,7 +15,6 @@ var logFile *lumberjack.Logger
 
 // Setup initializes the logging system
 func Setup(logPath string, debug bool) error {
-	// Ensure log directory exists
 	logDir := filepath.Dir(logPath)
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return fmt.Errorf("failed to create log directory: %w", err)
@@ -30,23 +29,20 @@ func Setup(logPath string, debug bool) error {
 		Compress:   false, // Don't compress to make debugging easier
 	}
 
-	level := slog.LevelInfo
-	if debug {
-		level = slog.LevelDebug
-	}
-
-	// Create multi-writer for both file and stdout (if available)
 	var writers []io.Writer
 	writers = append(writers, logFile)
 
-	// Try to add stdout if available (not available in GUI mode on Windows)
 	if fileInfo, _ := os.Stdout.Stat(); fileInfo != nil {
 		writers = append(writers, os.Stdout)
 	}
 
 	multiWriter := io.MultiWriter(writers...)
 
-	// Setup slog
+	level := slog.LevelInfo
+	if debug {
+		level = slog.LevelDebug
+	}
+
 	handler := slog.NewTextHandler(multiWriter, &slog.HandlerOptions{
 		Level: level,
 	})
@@ -58,9 +54,6 @@ func Setup(logPath string, debug bool) error {
 
 	slog.Info("logging initialized", "path", logPath, "debug", debug)
 
-	// Write a test message directly to file to ensure it works
-	fmt.Fprintf(logFile, "=== Rewind Log Started ===\n")
-
 	return nil
 }
 
@@ -68,12 +61,17 @@ func Setup(logPath string, debug bool) error {
 func Close() {
 	if logFile != nil {
 		slog.Info("logging shutdown")
-		logFile.Close()
+		err := logFile.Close()
+		if err != nil {
+			// todo
+			slog.Error("failed to close log file", "error", err)
+			return
+		}
 	}
 }
 
-// GetLogPath returns the log file path relative to executable
-func GetLogPath() string {
+// GetDefaultLogPath returns the log file path relative to executable
+func GetDefaultLogPath() string {
 	exePath, err := os.Executable()
 	if err != nil {
 		// Fallback to current directory
