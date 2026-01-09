@@ -68,8 +68,8 @@ export default {
 				},
 			},
 			animation: {
-				"collapsible-down": "collapsible-down 0.2s ease-out",
-				"collapsible-up": "collapsible-up 0.2s ease-out",
+				"collapsible-down": "collapsible-down 1.2s cubic-bezier(0.22, 1, 0.36, 1)",
+				"collapsible-up": "collapsible-up 1.2s cubic-bezier(0.22, 1, 0.36, 1)",
 			},
 		}
 	},

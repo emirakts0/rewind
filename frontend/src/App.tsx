@@ -156,13 +156,24 @@ function App() {
             </header>
 
             {/* Main Content Area */}
-            <main className="flex-1 flex flex-col items-center justify-center px-8 gap-8">
+            <main className={cn(
+                "flex-1 flex flex-col items-center px-8 transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                configOpen ? "pt-6 gap-2" : "pt-[22vh] gap-8"
+            )}>
                 {/* Buffer Info */}
                 <div className="text-center space-y-4">
                     <div className="space-y-1">
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Buffer Length</p>
+                        <div className={cn(
+                            "grid transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                            configOpen ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
+                        )}>
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest overflow-hidden">Buffer Length</p>
+                        </div>
                         <div className="flex items-baseline justify-center gap-1.5">
-                            <span className="text-7xl font-bold tabular-nums tracking-tighter">
+                            <span className={cn(
+                                "font-bold tabular-nums tracking-tighter transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                                configOpen ? "text-5xl" : "text-7xl"
+                            )}>
                                 {formatBufferDisplay(config.recordSeconds)}
                             </span>
                             <span className="text-2xl text-muted-foreground font-light">
@@ -186,13 +197,18 @@ function App() {
                 </div>
 
                 {/* State Info */}
-                <p className="text-xs text-muted-foreground/60 text-center h-4">
-                    {isRecording
-                        ? `Buffer Usage: ${state.bufferUsage}% • Recording for: ${formatTime(state.recordingFor)}`
-                        : (
-                            <span className="animate-pulse">Drag or select duration</span>
-                        )}
-                </p>
+                <div className={cn(
+                    "grid transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                    configOpen ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
+                )}>
+                    <p className="text-xs text-muted-foreground/60 text-center h-4 overflow-hidden">
+                        {isRecording
+                            ? `Buffer Usage: ${state.bufferUsage}% • Recording for: ${formatTime(state.recordingFor)}`
+                            : (
+                                <span className="animate-pulse">Drag or select duration</span>
+                            )}
+                    </p>
+                </div>
             </main>
 
             {/* Footer */}
@@ -209,10 +225,10 @@ function App() {
                 />
 
                 <div className={cn(
-                    "transition-all duration-[1400s] ease-[cubic-bezier(0.22,1,0.36,1)] transform origin-bottom",
+                    "transition-all ease-[cubic-bezier(0.22,1,0.36,1)] transform origin-bottom",
                     configOpen
-                        ? "opacity-0 -translate-y-4 scale-90 max-h-0 overflow-hidden pointer-events-none mt-0"
-                        : "opacity-100 translate-y-0 scale-100 max-h-24 mt-3"
+                        ? "duration-[1000ms] opacity-0 translate-y-4 scale-90 max-h-0 overflow-hidden pointer-events-none mt-0"
+                        : "duration-700 opacity-100 translate-y-0 scale-100 max-h-24 mt-3"
                 )}>
                     {/* Action buttons */}
                     {!isRecording ? (
