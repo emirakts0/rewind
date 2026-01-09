@@ -30,6 +30,10 @@ export function SaveClip() {
   return window['go']['app']['App']['SaveClip']();
 }
 
+export function SelectDirectory() {
+  return window['go']['app']['App']['SelectDirectory']();
+}
+
 export function SetConfig(arg1) {
   return window['go']['app']['App']['SetConfig'](arg1);
 }

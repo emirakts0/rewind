@@ -120,3 +120,18 @@ func CPUEncoderArgs() []string {
 		"-tune", "zerolatency",
 	}
 }
+
+// FindBestEncoder selects the optimal encoder based on hardware priority.
+// TODO:
+// For now, just returns the first available encoder
+func FindBestEncoder(gpus GPUList) *Encoder {
+	for _, gpu := range gpus {
+		for i := range gpu.Encoders {
+			enc := &gpu.Encoders[i]
+			if enc.Available {
+				return enc
+			}
+		}
+	}
+	return nil
+}

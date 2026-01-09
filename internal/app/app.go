@@ -12,6 +12,8 @@ import (
 	"rewind/internal/capture"
 	"rewind/internal/hardware"
 	"rewind/internal/output"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // Status represents the current application state
@@ -382,19 +384,36 @@ func (a *App) setState(status Status, errorMsg string) {
 	}
 }
 
+// SelectDirectory opens a directory selection dialog
+func (a *App) SelectDirectory() (string, error) {
+	slog.Info("SelectDirectory called")
+	selection, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title:            "Select Output Directory",
+		DefaultDirectory: a.config.OutputDir,
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return selection, nil
+}
+
 func (a *App) autoSelectEncoder() {
 	if a.sysInfo == nil {
 		return
 	}
 
-	encoders := a.sysInfo.GetAvailableEncoders()
-	for _, e := range encoders {
-		if e.Name != "libx264" {
-			a.config.EncoderName = e.Name
-			return
-		}
+	hardware.ValidateEncoders(a.sysInfo.GPUs)
+
+	best := hardware.FindBestEncoder(a.sysInfo.GPUs)
+	if best != nil {
+		slog.Info("auto-selected encoder", "encoder", best.Name)
+		a.config.EncoderName = best.Name
+	} else {
+		slog.Info("auto-selected fallback cpu encoder")
+		a.config.EncoderName = "libx264"
 	}
-	a.config.EncoderName = "libx264"
 }
 
 // --- DTOs for Wails binding ---

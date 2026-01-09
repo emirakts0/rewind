@@ -4,27 +4,54 @@
 
 @layer base {
   :root {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 6%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 217.2 91.2% 59.8%;
+    /* Background derived from #2D4039 but much darker for deep dark mode */
+    --background: 158 24% 7%;
+    --foreground: 46 60% 86%;
+    /* #F2E7C4 Cream */
+
+    /* Card derived from #2D4039, slightly darker than original but lighter than bg */
+    --card: 158 20% 12%;
+    --card-foreground: 46 60% 86%;
+
+    /* Popover/Panels can be the original #2D4039 or slightly adjusted */
+    --popover: 158 17% 16%;
+    --popover-foreground: 46 60% 86%;
+
+    /* Primary: #04BF8A Bright Green */
+    --primary: 163 94% 38%;
+    --primary-foreground: 46 60% 86%;
+    /* Cream text on green button */
+
+    /* Secondary: #2D4039 Original Dark Green/Charcoal */
+    --secondary: 158 17% 21%;
+    --secondary-foreground: 46 60% 86%;
+
+    /* Muted: Desaturated version of secondary or the tile red #BF4A3F as muted accent */
+    --muted: 158 15% 15%;
+    --muted-foreground: 158 10% 60%;
+
+    /* Accent: #04BF8A for hover states etc */
+    --accent: 158 17% 25%;
+    --accent-foreground: 46 60% 86%;
+
+    /* Destructive: #F24535 Bright Red */
+    --destructive: 5 89% 58%;
+    --destructive-foreground: 46 60% 86%;
+
+    --border: 158 17% 21%;
+    --input: 158 17% 21%;
+    --ring: 163 94% 38%;
+    /* Primary Green Ring */
+
     --radius: 0.75rem;
-    --success: 142.1 76.2% 36.3%;
+
+    /* Success uses Primary Green #04BF8A */
+    --success: 163 94% 38%;
+    --success-foreground: 158 24% 5%;
+
+    /* Action Button: #F2E7C4 Cream */
+    --action: 46 60% 86%;
+    --action-foreground: 158 24% 7%;
   }
 }
 
@@ -48,87 +75,11 @@ body {
   user-select: none;
 }
 
+
 #root {
   height: 100vh;
   display: flex;
   flex-direction: column;
-}
-
-/* Slider custom styles */
-.slider-track {
-  position: relative;
-  height: 80px;
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  padding: 0 20px;
-}
-
-.slider-bar {
-  flex: 1;
-  background: linear-gradient(to top, hsl(var(--primary) / 0.3), hsl(var(--primary) / 0.6));
-  border-radius: 4px 4px 0 0;
-  transition: all 0.15s ease;
-  min-height: 8px;
-}
-
-.slider-bar.active {
-  background: linear-gradient(to top, hsl(var(--primary)), hsl(var(--primary) / 0.8));
-  box-shadow: 0 0 12px hsl(var(--primary) / 0.5);
-}
-
-.slider-indicator {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: white;
-  border-radius: 2px;
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
-  transition: left 0.1s ease;
-}
-
-/* Pulse animation */
-@keyframes pulse-slow {
-
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.6;
-  }
-}
-
-.animate-pulse-slow {
-  animation: pulse-slow 2s ease-in-out infinite;
-}
-
-/* Recording pulse */
-@keyframes recording-pulse {
-
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 hsl(var(--destructive) / 0.4);
-  }
-
-  50% {
-    box-shadow: 0 0 0 10px hsl(var(--destructive) / 0);
-  }
-}
-
-.recording-indicator {
-  animation: recording-pulse 2s ease-in-out infinite;
-}
-
-/* Collapsible animation */
-[data-state="open"]>.chevron-icon {
-  transform: rotate(180deg);
-}
-
-.chevron-icon {
-  transition: transform 0.2s ease;
 }
 
 /* Custom scrollbar */

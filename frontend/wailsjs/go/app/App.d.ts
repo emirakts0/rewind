@@ -16,6 +16,8 @@ export function IsRecording():Promise<boolean>;
 
 export function SaveClip():Promise<string>;
 
+export function SelectDirectory():Promise<string>;
+
 export function SetConfig(arg1:app.Config):Promise<void>;
 
 export function Start():Promise<void>;

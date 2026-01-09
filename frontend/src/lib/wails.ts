@@ -45,6 +45,7 @@ declare global {
                     Stop(): Promise<void>
                     SaveClip(): Promise<string>
                     IsRecording(): Promise<boolean>
+                    SelectDirectory(): Promise<string>
                 }
             }
         }
@@ -91,5 +92,9 @@ export const api = {
 
     async isRecording(): Promise<boolean> {
         return window.go.app.App.IsRecording()
+    },
+
+    async SelectDirectory(): Promise<string> {
+        return window.go.app.App.SelectDirectory()
     },
 }
