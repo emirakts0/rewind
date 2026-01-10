@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	hiddenexec "rewind/internal/hardware"
+	stdruntime "runtime"
+	"runtime/debug"
 )
 
 type Saver struct {
@@ -46,43 +48,64 @@ func (s *Saver) Save(src Snapshotter, opts *SaveOptions) error {
 		return fmt.Errorf("buffer is empty")
 	}
 
-	go s.saveAsync(data, opts)
+	go s.processSave(data, opts)
 	return nil
 }
 
-func (s *Saver) saveAsync(data []byte, opts *SaveOptions) {
-	tsPath := filepath.Join(s.outputDir, opts.Filename+".ts")
-	mp4Path := filepath.Join(s.outputDir, opts.Filename+".mp4")
+func (s *Saver) processSave(data []byte, opts *SaveOptions) {
+	// 1. Write to temporary TS file
+	tsPath, err := s.writeTempFile(data, opts)
 
-	f, err := os.Create(tsPath)
+	// Explicitly release the strong reference to the huge buffer
+	// This makes it eligible for GC immediately, while the conversion runs
+	data = nil
+	stdruntime.GC()
+	debug.FreeOSMemory()
+
 	if err != nil {
-		slog.Error("failed to create file", "path", tsPath, "error", err)
+		slog.Error("failed to write temp file", "error", err)
 		return
 	}
+
+	// 2. Convert to MP4
+	if opts.ConvertToMP4 {
+		s.convertToMP4(tsPath, opts)
+	} else {
+		slog.Info("clip saved", "path", tsPath)
+	}
+}
+
+func (s *Saver) writeTempFile(data []byte, opts *SaveOptions) (string, error) {
+	tsPath := filepath.Join(s.outputDir, opts.Filename+".ts")
+	f, err := os.Create(tsPath)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
 
 	w := bufio.NewWriterSize(f, 8*1024*1024)
 	if _, err := w.Write(data); err != nil {
-		slog.Error("failed to write data", "error", err)
-		f.Close()
-		return
+		return "", err
 	}
-	w.Flush()
-	f.Close()
+	if err := w.Flush(); err != nil {
+		return "", err
+	}
 
-	if opts.ConvertToMP4 {
-		absTs, _ := filepath.Abs(tsPath)
-		absMp4, _ := filepath.Abs(mp4Path)
+	return tsPath, nil
+}
 
-		cmd := hiddenexec.Command(s.ffmpegPath, "-y", "-i", absTs, "-c", "copy", absMp4)
-		if err := cmd.Run(); err == nil {
-			slog.Info("clip saved", "path", mp4Path)
-			if opts.DeleteTS {
-				os.Remove(absTs)
-			}
-		} else {
-			slog.Error("conversion failed", "error", err)
+func (s *Saver) convertToMP4(tsPath string, opts *SaveOptions) {
+	mp4Path := filepath.Join(s.outputDir, opts.Filename+".mp4")
+	absTs, _ := filepath.Abs(tsPath)
+	absMp4, _ := filepath.Abs(mp4Path)
+
+	cmd := hiddenexec.Command(s.ffmpegPath, "-y", "-i", absTs, "-c", "copy", absMp4)
+	if err := cmd.Run(); err == nil {
+		slog.Info("clip saved", "path", mp4Path)
+		if opts.DeleteTS {
+			os.Remove(absTs)
 		}
 	} else {
-		slog.Info("clip saved", "path", tsPath)
+		slog.Error("conversion failed", "error", err)
 	}
 }

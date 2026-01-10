@@ -4,6 +4,8 @@ import (
 	"context"
 	"embed"
 	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"path/filepath"
 
@@ -58,6 +60,14 @@ func main() {
 
 	ffmpegPath := getFFmpegPath()
 	log.Printf("Using FFmpeg: %s", ffmpegPath)
+
+	// Start pprof server
+	go func() {
+		log.Println("Starting pprof server on :6060")
+		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
+			log.Printf("pprof failed: %v", err)
+		}
+	}()
 
 	// Create app instance
 	rewindApp := app.New(ffmpegPath)

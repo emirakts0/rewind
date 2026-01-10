@@ -11,6 +11,7 @@ import { toast } from "sonner"
 import { BufferSlider, BUFFER_STEPS } from '@/components/buffer-slider'
 import { StatusBadge } from '@/components/status-badge'
 import { ConfigPanel } from '@/components/config-panel'
+import { ClipsDrawer } from '@/components/clips-drawer'
 
 function App() {
     const [displays, setDisplays] = useState<DisplayInfo[]>([])
@@ -21,7 +22,8 @@ function App() {
         fps: 60,
         bitrate: '15M',
         recordSeconds: 30,
-        outputDir: './clips'
+        outputDir: './clips',
+        convertToMP4: true
     })
     const [state, setState] = useState<State>({
         status: 'idle',
@@ -43,11 +45,12 @@ function App() {
 
     const getBufferUnit = (seconds: number) => seconds >= 60 ? 'min' : 'sec'
 
-    const estimatedMemory = useCallback(() => {
-        const bitrateMap: Record<string, number> = { '8M': 8, '15M': 15, '25M': 25, '40M': 40 }
-        const mbps = bitrateMap[config.bitrate] || 15
-        const mb = (mbps * config.recordSeconds) / 8
-        return `~${Math.round(mb)}MB`
+    const [estimatedMemory, setEstimatedMemory] = useState("~0MB")
+
+    useEffect(() => {
+        api.estimateMemory(config.bitrate, config.recordSeconds)
+            .then(setEstimatedMemory)
+            .catch(err => console.error(err))
     }, [config.bitrate, config.recordSeconds])
 
     // Init Effect
@@ -147,12 +150,16 @@ function App() {
 
     return (
         <div className="h-screen w-screen bg-transparent flex flex-col overflow-hidden select-none font-sans text-foreground">
+
             {/* Header */}
             <header className="px-4 pt-4 pb-2 flex items-center justify-between drag-handle cursor-move z-50">
                 <span className="font-extrabold text-lg tracking-tight bg-gradient-to-br from-primary via-primary/90 to-primary/70 bg-clip-text text-transparent drop-shadow-sm">
                     Rewind
                 </span>
-                <StatusBadge status={isRecording ? 'recording' : 'idle'} />
+                <div className="flex items-center gap-2">
+                    <StatusBadge status={isRecording ? 'recording' : 'idle'} />
+                    <ClipsDrawer />
+                </div>
             </header>
 
             {/* Main Content Area */}
@@ -183,7 +190,7 @@ function App() {
                     </div>
                     <Badge variant="outline" className="gap-1.5 px-3 py-1 bg-secondary/30 backdrop-blur-sm border-border/50">
                         <HardDrive className="w-3 h-3" />
-                        <span className="font-normal opacity-80">Est. Memory: {estimatedMemory()}</span>
+                        <span className="font-normal opacity-80">Est. Memory: {estimatedMemory}</span>
                     </Badge>
                 </div>
 

@@ -63,9 +63,10 @@ func (c *Capturer) readLoop() {
 	for {
 		n, err := reader.Read(buf)
 		if n > 0 && c.OnData != nil {
-			data := make([]byte, n)
-			copy(data, buf[:n])
-			c.OnData(data)
+			// Pass buffer slice directly to avoid allocation loop.
+			// The subscriber (Ring.Write) copies the data, so this is safe
+			// as long as it returns before we overwrite buf.
+			c.OnData(buf[:n])
 		}
 		if err != nil {
 			if err != io.EOF && c.OnError != nil {

@@ -5,7 +5,12 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
+	"path/filepath"
+	stdruntime "runtime"
+	"runtime/debug"
 	"sync"
+	"syscall"
 	"time"
 
 	"rewind/internal/buffer"
@@ -34,6 +39,7 @@ type Config struct {
 	Bitrate       string `json:"bitrate"`
 	RecordSeconds int    `json:"recordSeconds"`
 	OutputDir     string `json:"outputDir"`
+	ConvertToMP4  bool   `json:"convertToMP4"`
 }
 
 // DefaultConfig returns sensible defaults
@@ -45,6 +51,7 @@ func DefaultConfig() Config {
 		Bitrate:       "15M",
 		RecordSeconds: 30,
 		OutputDir:     "./clips",
+		ConvertToMP4:  true,
 	}
 }
 
@@ -326,6 +333,11 @@ func (a *App) Stop() error {
 		a.capturer = nil
 	}
 
+	// Release memory immediately
+	a.ringBuffer = nil
+	stdruntime.GC()
+	debug.FreeOSMemory()
+
 	a.setState(StatusIdle, "")
 	slog.Info("recording stopped")
 	return nil
@@ -351,6 +363,8 @@ func (a *App) SaveClip() (string, error) {
 
 	filename := fmt.Sprintf("clip_%s", time.Now().Format("20060102_150405"))
 	opts := output.DefaultSaveOptions(filename)
+	opts.ConvertToMP4 = a.config.ConvertToMP4
+	opts.DeleteTS = a.config.ConvertToMP4 // Only delete TS if we converted to MP4
 
 	if err := a.saver.Save(a.ringBuffer, opts); err != nil {
 		return "", fmt.Errorf("save failed: %w", err)
@@ -358,12 +372,17 @@ func (a *App) SaveClip() (string, error) {
 
 	a.lastSaveTime = time.Now()
 
+	ext := ".ts"
+	if a.config.ConvertToMP4 {
+		ext = ".mp4"
+	}
+
 	if a.OnClipSaved != nil {
-		go a.OnClipSaved(filename + ".mp4")
+		go a.OnClipSaved(filename + ext)
 	}
 
 	slog.Info("clip saved", "filename", filename)
-	return filename + ".mp4", nil
+	return filename + ext, nil
 }
 
 // IsRecording returns true if currently recording
@@ -414,6 +433,108 @@ func (a *App) autoSelectEncoder() {
 		slog.Info("auto-selected fallback cpu encoder")
 		a.config.EncoderName = "libx264"
 	}
+}
+
+// EstimateMemory calculates the estimated buffer size based on bitrate and duration
+func (a *App) EstimateMemory(bitrate string, seconds int) string {
+	size := capture.CalculateBufferSize(bitrate, seconds)
+	// Convert to MegaBytes (1024^2)
+	mb := float64(size) / (1024 * 1024)
+	return fmt.Sprintf("~%.0fMB", mb)
+}
+
+// Clip represents a saved video file
+type Clip struct {
+	Name    string    `json:"name"`
+	Path    string    `json:"path"`
+	Size    int64     `json:"size"`
+	ModTime time.Time `json:"modTime"`
+}
+
+// GetClips returns a list of saved clips in the output directory
+func (a *App) GetClips() ([]Clip, error) {
+	files, err := os.ReadDir(a.config.OutputDir)
+	if err != nil {
+		// If dir doesn't exist, return empty
+		if os.IsNotExist(err) {
+			return []Clip{}, nil
+		}
+		return nil, err
+	}
+
+	var clips []Clip
+	for _, f := range files {
+		if f.IsDir() {
+			continue
+		}
+		ext := filepath.Ext(f.Name())
+		if ext != ".mp4" && ext != ".ts" {
+			continue
+		}
+
+		info, err := f.Info()
+		if err != nil {
+			continue
+		}
+
+		absPath, _ := filepath.Abs(filepath.Join(a.config.OutputDir, f.Name()))
+		clips = append(clips, Clip{
+			Name:    f.Name(),
+			Path:    absPath,
+			Size:    info.Size(),
+			ModTime: info.ModTime(),
+		})
+	}
+
+	// Sort by newest first
+	// (Simple bubble sort or just let frontend sort. Let's let frontend sort or rely on OS order?
+	// OS order is arbitrary. Let's do a quick reverse sort if needed, but array sort in Go is verbose.
+	// Frontend can sort.)
+	return clips, nil
+}
+
+// OpenClip opens a clip in the default system player
+func (a *App) OpenClip(path string) error {
+	slog.Info("opening clip", "path", path)
+	cmd := exec.Command("explorer", path)
+	return cmd.Start()
+}
+
+// ConvertToMP4 converts a .ts file to .mp4 and deletes the original
+func (a *App) ConvertToMP4(inputPath string) error {
+	if filepath.Ext(inputPath) != ".ts" {
+		return fmt.Errorf("input file must be .ts")
+	}
+
+	outputPath := inputPath[:len(inputPath)-3] + ".mp4"
+
+	// Use ffmpeg to convert (copy codec)
+	cmd := exec.Command(a.ffmpegPath,
+		"-i", inputPath,
+		"-c", "copy",
+		"-y", // overwrite if exists
+		outputPath,
+	)
+
+	// Hide command window on Windows
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+
+	if err := cmd.Run(); err != nil {
+		slog.Error("conversion failed", "error", err)
+		return err
+	}
+
+	// Delete original file
+	if err := os.Remove(inputPath); err != nil {
+		slog.Error("failed to delete .ts file", "error", err)
+	}
+
+	a.EmitClipsUpdate()
+	return nil
+}
+
+func (a *App) EmitClipsUpdate() {
+	runtime.EventsEmit(a.ctx, "clips-updated")
 }
 
 // --- DTOs for Wails binding ---

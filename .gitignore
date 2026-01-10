@@ -31,3 +31,6 @@ fabric.properties
 /frontend/node_modules
 /frontend/dist
 /build
+/clips
+
+*.exe

@@ -20,6 +20,14 @@ export interface Config {
     bitrate: string
     recordSeconds: number
     outputDir: string
+    convertToMP4: boolean
+}
+
+export interface Clip {
+    name: string
+    path: string
+    size: number
+    modTime: string
 }
 
 export interface State {
@@ -45,7 +53,12 @@ declare global {
                     Stop(): Promise<void>
                     SaveClip(): Promise<string>
                     IsRecording(): Promise<boolean>
+                    IsRecording(): Promise<boolean>
                     SelectDirectory(): Promise<string>
+                    EstimateMemory(bitrate: string, seconds: number): Promise<string>
+                    GetClips(): Promise<Clip[]>
+                    OpenClip(path: string): Promise<void>
+                    ConvertToMP4(path: string): Promise<void>
                 }
             }
         }
@@ -96,5 +109,21 @@ export const api = {
 
     async SelectDirectory(): Promise<string> {
         return window.go.app.App.SelectDirectory()
+    },
+
+    async estimateMemory(bitrate: string, seconds: number): Promise<string> {
+        return window.go.app.App.EstimateMemory(bitrate, seconds)
+    },
+
+    async getClips(): Promise<Clip[]> {
+        return window.go.app.App.GetClips()
+    },
+
+    async openClip(path: string): Promise<void> {
+        return window.go.app.App.OpenClip(path)
+    },
+
+    async convertToMP4(path: string): Promise<void> {
+        return window.go.app.App.ConvertToMP4(path)
     },
 }
