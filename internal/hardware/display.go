@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
+	"rewind/internal/utils"
 	"strconv"
 	"strings"
 	"syscall"
@@ -36,23 +37,28 @@ const monitorInfoFPrimary = 0x00000001
 // DetectDisplays returns a list of all active displays.
 func DetectDisplays() (DisplayList, error) {
 	displays, err := detectDisplaysFromDDAGrab()
-	if err == nil && len(displays) > 0 {
-		enrichPrimaryStatus(displays)
-
-		// Log detected displays
-		for _, d := range displays {
-			slog.Info("detected display",
-				"index", d.Index,
-				"resolution", fmt.Sprintf("%dx%d", d.Width, d.Height),
-				"primary", d.IsPrimary,
-				"name", d.Name,
-			)
-		}
-
-		return displays, nil
+	if err != nil && len(displays) <= 0 {
+		return nil, fmt.Errorf("ddagrab display detection failed: %w", err)
 	}
 
-	return detectDisplaysFromWindowsAPI()
+	enrichPrimaryStatus(displays)
+
+	// Populate GPU index for each display
+	for _, d := range displays {
+		d.GPUIndex = GetMonitorGPUIndex(d.Index)
+	}
+
+	// Log detected displays
+	for _, d := range displays {
+		slog.Info("detected display",
+			"index", d.Index,
+			"resolution", fmt.Sprintf("%dx%d", d.Width, d.Height),
+			"primary", d.IsPrimary,
+			"name", d.Name,
+		)
+	}
+
+	return displays, nil
 }
 
 // detectDisplaysFromDDAGrab probes each output_idx using FFmpeg
@@ -81,7 +87,7 @@ func detectDisplaysFromDDAGrab() (DisplayList, error) {
 
 // probeOutputIndex uses FFmpeg to get information about a specific output
 func probeOutputIndex(idx int) (*Display, error) {
-	cmd := Command(FFmpegPath,
+	cmd := utils.Command(FFmpegPath,
 		"-hide_banner",
 		"-f", "lavfi",
 		"-i", "ddagrab=output_idx="+strconv.Itoa(idx)+":framerate=1",
@@ -167,42 +173,4 @@ func enrichPrimaryStatus(displays DisplayList) {
 			}
 		}
 	}
-}
-
-// detectDisplaysFromWindowsAPI is the fallback method
-func detectDisplaysFromWindowsAPI() (DisplayList, error) {
-	var displays DisplayList
-	idx := 0
-
-	callback := syscall.NewCallback(func(hMonitor uintptr, hdc uintptr, lprcClip uintptr, lParam uintptr) uintptr {
-		var info monitorInfoExW
-		info.CbSize = uint32(unsafe.Sizeof(info))
-
-		ret, _, _ := procGetMonitorInfoW.Call(hMonitor, uintptr(unsafe.Pointer(&info)))
-		if ret == 0 {
-			return 1
-		}
-
-		deviceName := syscall.UTF16ToString(info.SzDevice[:])
-
-		display := &Display{
-			Index:        idx,
-			Name:         deviceName,
-			FriendlyName: deviceName,
-			IsPrimary:    info.DwFlags&monitorInfoFPrimary != 0,
-			Width:        int(info.RcMonitor.Right - info.RcMonitor.Left),
-			Height:       int(info.RcMonitor.Bottom - info.RcMonitor.Top),
-			X:            int(info.RcMonitor.Left),
-			Y:            int(info.RcMonitor.Top),
-		}
-
-		displays = append(displays, display)
-		idx++
-
-		return 1
-	})
-
-	procEnumDisplayMonitors.Call(0, 0, callback, 0)
-
-	return displays, nil
 }

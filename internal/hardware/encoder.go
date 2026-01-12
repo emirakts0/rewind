@@ -2,6 +2,7 @@ package hardware
 
 import (
 	"log/slog"
+	"rewind/internal/utils"
 	"strings"
 )
 
@@ -9,7 +10,7 @@ import (
 func DetectAvailableEncoders() []string {
 	slog.Debug("detecting encoders", "ffmpegPath", FFmpegPath)
 
-	cmd := Command(FFmpegPath, "-hide_banner", "-encoders")
+	cmd := utils.Command(FFmpegPath, "-hide_banner", "-encoders")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		slog.Warn("ffmpeg encoder detection failed", "error", err, "output", string(out))
@@ -121,9 +122,7 @@ func CPUEncoderArgs() []string {
 	}
 }
 
-// FindBestEncoder selects the optimal encoder based on hardware priority.
-// TODO:
-// For now, just returns the first available encoder
+// TODO
 func FindBestEncoder(gpus GPUList) *Encoder {
 	for _, gpu := range gpus {
 		for i := range gpu.Encoders {

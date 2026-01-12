@@ -3,7 +3,8 @@
 package hardware
 
 import (
-	"regexp"
+	"fmt"
+	"rewind/internal/utils"
 	"strings"
 )
 
@@ -11,14 +12,14 @@ import (
 func DetectGPUs() (GPUList, error) {
 	gpus, err := detectGPUsFromWMIC()
 	if err != nil || len(gpus) == 0 {
-		return detectGPUsFromEncoders()
+		return nil, fmt.Errorf("WMI GPU detection failed: %w", err)
 	}
 	return gpus, nil
 }
 
 // detectGPUsFromWMIC uses Windows WMI to get GPU information.
 func detectGPUsFromWMIC() (GPUList, error) {
-	cmd := Command("wmic", "path", "win32_videocontroller", "get", "name,adapterram,pnpdeviceid", "/format:csv")
+	cmd := utils.Command("wmic", "path", "win32_videocontroller", "get", "name,adapterram,pnpdeviceid", "/format:csv")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -38,9 +39,6 @@ func detectGPUsFromWMIC() (GPUList, error) {
 		if len(parts) < 4 {
 			continue
 		}
-
-		// CSV format: Node,AdapterRAM,Name,PNPDeviceID
-		vramStr := strings.TrimSpace(parts[1])
 		name := strings.TrimSpace(parts[2])
 
 		if name == "" || name == "Name" {
@@ -54,15 +52,12 @@ func detectGPUsFromWMIC() (GPUList, error) {
 		}
 
 		vendor := detectVendorFromName(name)
-		vram := parseVRAM(vramStr)
 
 		gpu := &GPU{
-			Index:        idx,
-			Name:         name,
-			Vendor:       vendor,
-			VRAM:         vram,
-			IsIntegrated: detectIsIntegrated(vendor, name, vram),
-			Encoders:     getEncodersForVendor(vendor),
+			Index:    idx,
+			Name:     name,
+			Vendor:   vendor,
+			Encoders: getEncodersForVendor(vendor),
 		}
 
 		gpus = append(gpus, gpu)
@@ -88,46 +83,6 @@ func detectVendorFromName(name string) Vendor {
 	return VendorUnknown
 }
 
-func parseVRAM(vramStr string) uint64 {
-	re := regexp.MustCompile(`[0-9]+`)
-	match := re.FindString(vramStr)
-	if match == "" {
-		return 0
-	}
-
-	var vram uint64
-	for _, c := range match {
-		vram = vram*10 + uint64(c-'0')
-	}
-	return vram
-}
-
-func detectIsIntegrated(vendor Vendor, name string, vram uint64) bool {
-	nameLower := strings.ToLower(name)
-
-	// Intel: integrated unless Arc
-	if vendor == VendorIntel {
-		return !strings.Contains(nameLower, "arc")
-	}
-
-	// AMD APU detection
-	if vendor == VendorAMD {
-		if strings.Contains(nameLower, "radeon graphics") ||
-			strings.Contains(nameLower, "radeon(tm) graphics") {
-			return true
-		}
-		if strings.Contains(nameLower, "vega") && !strings.Contains(nameLower, "rx vega") {
-			return true
-		}
-		// Very low VRAM = APU
-		if vram > 0 && vram <= 512*1024*1024 {
-			return true
-		}
-	}
-
-	return false
-}
-
 func getEncodersForVendor(vendor Vendor) []Encoder {
 	switch vendor {
 	case VendorNVIDIA:
@@ -147,65 +102,4 @@ func getEncodersForVendor(vendor Vendor) []Encoder {
 		}
 	}
 	return nil
-}
-
-// detectGPUsFromEncoders is a fallback when WMI fails.
-func detectGPUsFromEncoders() (GPUList, error) {
-	var gpus GPUList
-	encoders := DetectAvailableEncoders()
-
-	hasNVIDIA := false
-	hasAMD := false
-	hasIntel := false
-
-	for _, enc := range encoders {
-		switch {
-		case strings.Contains(enc, "nvenc"):
-			hasNVIDIA = true
-		case strings.Contains(enc, "amf"):
-			hasAMD = true
-		case strings.Contains(enc, "qsv"):
-			hasIntel = true
-		}
-	}
-
-	idx := 0
-	if hasNVIDIA {
-		gpus = append(gpus, &GPU{
-			Index:        idx,
-			Name:         "NVIDIA GPU",
-			Vendor:       VendorNVIDIA,
-			IsIntegrated: false,
-			Encoders:     getEncodersForVendor(VendorNVIDIA),
-		})
-		idx++
-	}
-	if hasAMD {
-		gpus = append(gpus, &GPU{
-			Index:    idx,
-			Name:     "AMD GPU",
-			Vendor:   VendorAMD,
-			Encoders: getEncodersForVendor(VendorAMD),
-		})
-		idx++
-	}
-	if hasIntel {
-		gpus = append(gpus, &GPU{
-			Index:        idx,
-			Name:         "Intel GPU",
-			Vendor:       VendorIntel,
-			IsIntegrated: true,
-			Encoders:     getEncodersForVendor(VendorIntel),
-		})
-	}
-
-	if len(gpus) == 0 {
-		gpus = append(gpus, &GPU{
-			Index:  0,
-			Name:   "CPU (Software Encoding)",
-			Vendor: VendorUnknown,
-		})
-	}
-
-	return gpus, nil
 }

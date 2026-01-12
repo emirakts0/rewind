@@ -172,28 +172,48 @@ func (a *App) GetDisplays() []DisplayInfo {
 	return displays
 }
 
-// GetEncoders returns all available encoders
+// GetEncoders returns all available encoders for the current display
 func (a *App) GetEncoders() []EncoderInfo {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
+	return a.getEncodersForDisplay(a.config.DisplayIndex)
+}
 
+// GetEncodersForDisplay returns available encoders for a specific display
+func (a *App) GetEncodersForDisplay(displayIndex int) []EncoderInfo {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.getEncodersForDisplay(displayIndex)
+}
+
+func (a *App) getEncodersForDisplay(displayIndex int) []EncoderInfo {
 	if a.sysInfo == nil {
 		return nil
 	}
 
+	display := a.sysInfo.GetDisplay(displayIndex)
+	targetGPU := -999
+	if display != nil {
+		targetGPU = display.GPUIndex
+	}
+
+	//todo: bu display encoder eşleştirme logiclerini burdan kaldıralım.
 	var encoders []EncoderInfo
 	for _, e := range a.sysInfo.GetAvailableEncoders() {
-		gpuName := "CPU"
-		if e.GPUIndex >= 0 {
-			if gpu := a.sysInfo.GPUs.FindByIndex(e.GPUIndex); gpu != nil {
-				gpuName = gpu.Name
+		// Include if it's CPU (-1) or matches the display's GPU
+		if e.GPUIndex == -1 || (targetGPU != -999 && e.GPUIndex == targetGPU) {
+			gpuName := "CPU"
+			if e.GPUIndex >= 0 {
+				if gpu := a.sysInfo.GPUs.FindByIndex(e.GPUIndex); gpu != nil {
+					gpuName = gpu.Name
+				}
 			}
+			encoders = append(encoders, EncoderInfo{
+				Name:    e.Name,
+				Codec:   e.Codec,
+				GPUName: gpuName,
+			})
 		}
-		encoders = append(encoders, EncoderInfo{
-			Name:    e.Name,
-			Codec:   e.Codec,
-			GPUName: gpuName,
-		})
 	}
 	return encoders
 }

@@ -4,8 +4,11 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"log/slog"
 	"os/exec"
-	hiddenexec "rewind/internal/hardware"
+	hiddenexec "rewind/internal/utils"
+	"strings"
+
 	"sync"
 )
 
@@ -13,6 +16,7 @@ type Capturer struct {
 	config  *Config
 	cmd     *exec.Cmd
 	stdout  io.ReadCloser
+	stdErr  io.ReadCloser
 	running bool
 	mu      sync.Mutex
 
@@ -45,6 +49,13 @@ func (c *Capturer) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
+
+	c.stdErr, err = c.cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
+	slog.Info("starting ffmpeg", "command", c.config.FFmpegPath+" "+strings.Join(args, " "))
 
 	if err := c.cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start ffmpeg: %w", err)

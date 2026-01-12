@@ -53,6 +53,14 @@ function App() {
             .catch(err => console.error(err))
     }, [config.bitrate, config.recordSeconds])
 
+    // Update encoders when display changes
+    useEffect(() => {
+        if (loading) return
+        api.getEncodersForDisplay(config.displayIndex)
+            .then(setEncoders)
+            .catch(err => console.error("Failed to update encoders:", err))
+    }, [config.displayIndex, loading])
+
     // Init Effect
     useEffect(() => {
         const init = async () => {

@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	hiddenexec "rewind/internal/hardware"
+	hiddenexec "rewind/internal/utils"
 	stdruntime "runtime"
 	"runtime/debug"
 )

@@ -27,7 +27,7 @@ crashlytics.properties
 crashlytics-build.properties
 fabric.properties
 
-.todo
+.todo.txt
 /frontend/node_modules
 /frontend/dist
 /build

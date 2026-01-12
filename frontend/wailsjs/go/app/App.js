@@ -30,6 +30,10 @@ export function GetEncoders() {
   return window['go']['app']['App']['GetEncoders']();
 }
 
+export function GetEncodersForDisplay(arg1) {
+  return window['go']['app']['App']['GetEncodersForDisplay'](arg1);
+}
+
 export function GetState() {
   return window['go']['app']['App']['GetState']();
 }

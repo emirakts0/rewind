@@ -16,6 +16,8 @@ export function GetDisplays():Promise<Array<app.DisplayInfo>>;
 
 export function GetEncoders():Promise<Array<app.EncoderInfo>>;
 
+export function GetEncodersForDisplay(arg1:number):Promise<Array<app.EncoderInfo>>;
+
 export function GetState():Promise<app.State>;
 
 export function Initialize():Promise<void>;

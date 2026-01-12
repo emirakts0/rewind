@@ -46,14 +46,9 @@ func Detect() (*SystemInfo, error) {
 // Print logs all detected hardware information
 func (s *SystemInfo) Print() {
 	for _, g := range s.GPUs {
-		gpuType := "discrete"
-		if g.IsIntegrated {
-			gpuType = "integrated"
-		}
 		slog.Info("detected GPU",
 			"index", g.Index,
 			"name", g.Name,
-			"type", gpuType,
 		)
 	}
 

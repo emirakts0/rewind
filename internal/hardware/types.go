@@ -17,23 +17,16 @@ const (
 
 // GPU represents a graphics processing unit
 type GPU struct {
-	Index        int
-	Name         string
-	Vendor       Vendor
-	VRAM         uint64
-	IsIntegrated bool
-	Encoders     []Encoder
+	Index    int
+	Name     string
+	Vendor   Vendor
+	Encoders []Encoder
 }
 
 func (g *GPU) String() string {
-	gpuType := "discrete"
-	if g.IsIntegrated {
-		gpuType = "integrated"
-	}
-	return fmt.Sprintf("[%d] %s (%s, %s)", g.Index, g.Name, g.Vendor, gpuType)
+	return fmt.Sprintf("[%d] %s (%s)", g.Index, g.Name, g.Vendor)
 }
 
-// GPUList is a collection of GPUs
 type GPUList []*GPU
 
 func (l GPUList) FindByIndex(index int) *GPU {
@@ -45,7 +38,6 @@ func (l GPUList) FindByIndex(index int) *GPU {
 	return nil
 }
 
-// Encoder represents a hardware video encoder
 type Encoder struct {
 	Name      string
 	Codec     string
@@ -53,7 +45,6 @@ type Encoder struct {
 	GPUIndex  int // which GPU this encoder belongs to
 }
 
-// Display represents a monitor/display device
 type Display struct {
 	Index        int
 	Name         string
@@ -62,6 +53,7 @@ type Display struct {
 	Width        int
 	Height       int
 	X, Y         int
+	GPUIndex     int
 }
 
 func (d *Display) String() string {
@@ -72,7 +64,6 @@ func (d *Display) String() string {
 	return fmt.Sprintf("[%d] %dx%d%s", d.Index, d.Width, d.Height, primary)
 }
 
-// DisplayList is a collection of displays
 type DisplayList []*Display
 
 func (l DisplayList) FindByIndex(index int) *Display {
@@ -96,7 +87,6 @@ func (l DisplayList) FindPrimary() *Display {
 	return nil
 }
 
-// SystemInfo contains all detected hardware information
 type SystemInfo struct {
 	GPUs     GPUList
 	Displays DisplayList
@@ -127,9 +117,4 @@ func (s *SystemInfo) GetAvailableEncoders() []Encoder {
 // GetDisplay finds a display by index
 func (s *SystemInfo) GetDisplay(index int) *Display {
 	return s.Displays.FindByIndex(index)
-}
-
-// GetPrimaryDisplay returns the primary display
-func (s *SystemInfo) GetPrimaryDisplay() *Display {
-	return s.Displays.FindPrimary()
 }

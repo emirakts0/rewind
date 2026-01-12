@@ -59,6 +59,7 @@ declare global {
                     GetClips(): Promise<Clip[]>
                     OpenClip(path: string): Promise<void>
                     ConvertToMP4(path: string): Promise<void>
+                    GetEncodersForDisplay(displayIndex: number): Promise<EncoderInfo[]>
                 }
             }
         }
@@ -125,5 +126,9 @@ export const api = {
 
     async convertToMP4(path: string): Promise<void> {
         return window.go.app.App.ConvertToMP4(path)
+    },
+
+    async getEncodersForDisplay(displayIndex: number): Promise<EncoderInfo[]> {
+        return window.go.app.App.GetEncodersForDisplay(displayIndex)
     },
 }
