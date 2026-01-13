@@ -10,13 +10,11 @@ import (
 	stdruntime "runtime"
 	"runtime/debug"
 	"sync"
-	"syscall"
 	"time"
 
 	"rewind/internal/buffer"
 	"rewind/internal/capture"
 	"rewind/internal/hardware"
-	"rewind/internal/output"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -79,7 +77,7 @@ type App struct {
 	state        State
 	capturer     *capture.Capturer
 	ringBuffer   *buffer.Ring
-	saver        *output.Saver
+	saver        *capture.Saver
 	startTime    time.Time
 	lastSaveTime time.Time
 
@@ -139,7 +137,7 @@ func (a *App) Initialize() error {
 
 	// Auto-select encoder if not set
 	if a.config.EncoderName == "" {
-		a.autoSelectEncoder()
+		a.config.EncoderName = hardware.FindBestEncoder(sysInfo.Encoders).Name
 	}
 
 	slog.Info("app initialized",
@@ -172,50 +170,34 @@ func (a *App) GetDisplays() []DisplayInfo {
 	return displays
 }
 
-// GetEncoders returns all available encoders for the current display
-func (a *App) GetEncoders() []EncoderInfo {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return a.getEncodersForDisplay(a.config.DisplayIndex)
-}
-
 // GetEncodersForDisplay returns available encoders for a specific display
 func (a *App) GetEncodersForDisplay(displayIndex int) []EncoderInfo {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	return a.getEncodersForDisplay(displayIndex)
-}
 
-func (a *App) getEncodersForDisplay(displayIndex int) []EncoderInfo {
 	if a.sysInfo == nil {
 		return nil
 	}
 
-	display := a.sysInfo.GetDisplay(displayIndex)
-	targetGPU := -999
-	if display != nil {
-		targetGPU = display.GPUIndex
+	encoders := a.sysInfo.GetEncodersForDisplay(displayIndex)
+	var result []EncoderInfo
+
+	for _, e := range encoders {
+		gpuName := "CPU"
+		if e.GPUIndex >= 0 {
+			if gpu := a.sysInfo.GPUs.FindByIndex(e.GPUIndex); gpu != nil {
+				gpuName = gpu.Name
+			}
+		}
+
+		result = append(result, EncoderInfo{
+			Name:    e.Name,
+			Codec:   e.Codec,
+			GPUName: gpuName,
+		})
 	}
 
-	//todo: bu display encoder eşleştirme logiclerini burdan kaldıralım.
-	var encoders []EncoderInfo
-	for _, e := range a.sysInfo.GetAvailableEncoders() {
-		// Include if it's CPU (-1) or matches the display's GPU
-		if e.GPUIndex == -1 || (targetGPU != -999 && e.GPUIndex == targetGPU) {
-			gpuName := "CPU"
-			if e.GPUIndex >= 0 {
-				if gpu := a.sysInfo.GPUs.FindByIndex(e.GPUIndex); gpu != nil {
-					gpuName = gpu.Name
-				}
-			}
-			encoders = append(encoders, EncoderInfo{
-				Name:    e.Name,
-				Codec:   e.Codec,
-				GPUName: gpuName,
-			})
-		}
-	}
-	return encoders
+	return result
 }
 
 // GetConfig returns the current configuration
@@ -306,7 +288,7 @@ func (a *App) Start() error {
 	// Create components
 	bufSize := capture.CalculateBufferSize(a.config.Bitrate, a.config.RecordSeconds)
 	a.ringBuffer = buffer.NewRing(bufSize)
-	a.saver = output.NewSaver(a.ffmpegPath, a.config.OutputDir)
+	a.saver = capture.NewSaver(a.ffmpegPath, a.config.OutputDir)
 
 	capturer, err := capture.NewCapturer(captureCfg)
 	if err != nil {
@@ -333,7 +315,7 @@ func (a *App) Start() error {
 
 	slog.Info("recording started",
 		"display", a.config.DisplayIndex,
-		"encoder", captureCfg.EncoderDisplayName(),
+		"encoder", a.config.EncoderName,
 	)
 
 	return nil
@@ -382,9 +364,8 @@ func (a *App) SaveClip() (string, error) {
 	}
 
 	filename := fmt.Sprintf("clip_%s", time.Now().Format("20060102_150405"))
-	opts := output.DefaultSaveOptions(filename)
-	opts.ConvertToMP4 = a.config.ConvertToMP4
-	opts.DeleteTS = a.config.ConvertToMP4 // Only delete TS if we converted to MP4
+	opts := capture.DefaultSaveOptions(filename)
+	opts.ConvertToMP4, opts.DeleteTS = a.config.ConvertToMP4, a.config.ConvertToMP4 // Only delete TS if we converted to MP4
 
 	if err := a.saver.Save(a.ringBuffer, opts); err != nil {
 		return "", fmt.Errorf("save failed: %w", err)
@@ -412,18 +393,6 @@ func (a *App) IsRecording() bool {
 	return a.state.Status == StatusRecording
 }
 
-// --- Internal methods ---
-
-func (a *App) setState(status Status, errorMsg string) {
-	a.state.Status = status
-	a.state.ErrorMessage = errorMsg
-
-	if a.OnStateChange != nil {
-		go a.OnStateChange(a.state)
-	}
-}
-
-// SelectDirectory opens a directory selection dialog
 func (a *App) SelectDirectory() (string, error) {
 	slog.Info("SelectDirectory called")
 	selection, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
@@ -436,21 +405,6 @@ func (a *App) SelectDirectory() (string, error) {
 	}
 
 	return selection, nil
-}
-
-func (a *App) autoSelectEncoder() {
-	if a.sysInfo == nil {
-		return
-	}
-
-	best := hardware.FindBestEncoder(a.sysInfo.Encoders)
-	if best != nil {
-		slog.Info("auto-selected encoder", "encoder", best.Name)
-		a.config.EncoderName = best.Name
-	} else {
-		slog.Info("auto-selected fallback cpu encoder")
-		a.config.EncoderName = "libx264"
-	}
 }
 
 // EstimateMemory calculates the estimated buffer size based on bitrate and duration
@@ -469,7 +423,7 @@ type Clip struct {
 	ModTime time.Time `json:"modTime"`
 }
 
-// GetClips returns a list of saved clips in the output directory
+// GetClips returns a list of saved clips in the output directory.
 func (a *App) GetClips() ([]Clip, error) {
 	files, err := os.ReadDir(a.config.OutputDir)
 	if err != nil {
@@ -504,10 +458,6 @@ func (a *App) GetClips() ([]Clip, error) {
 		})
 	}
 
-	// Sort by newest first
-	// (Simple bubble sort or just let frontend sort. Let's let frontend sort or rely on OS order?
-	// OS order is arbitrary. Let's do a quick reverse sort if needed, but array sort in Go is verbose.
-	// Frontend can sort.)
 	return clips, nil
 }
 
@@ -518,33 +468,28 @@ func (a *App) OpenClip(path string) error {
 	return cmd.Start()
 }
 
-// ConvertToMP4 converts a .ts file to .mp4 and deletes the original
+// ConvertToMP4 converts a .ts clip to .mp4 and deletes the original .ts file
 func (a *App) ConvertToMP4(inputPath string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.saver == nil {
+		return fmt.Errorf("saver not initialized")
+	}
+
 	if filepath.Ext(inputPath) != ".ts" {
 		return fmt.Errorf("input file must be .ts")
 	}
 
-	outputPath := inputPath[:len(inputPath)-3] + ".mp4"
+	// Extract filename without extension for options
+	baseName := filepath.Base(inputPath)
+	nameWithoutExt := baseName[:len(baseName)-len(filepath.Ext(baseName))]
 
-	// Use ffmpeg to convert (copy codec)
-	cmd := exec.Command(a.ffmpegPath,
-		"-i", inputPath,
-		"-c", "copy",
-		"-y", // overwrite if exists
-		outputPath,
-	)
+	opts := capture.DefaultSaveOptions(nameWithoutExt)
+	opts.ConvertToMP4, opts.DeleteTS = true, true
 
-	// Hide command window on Windows
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-
-	if err := cmd.Run(); err != nil {
-		slog.Error("conversion failed", "error", err)
+	if err := a.saver.ConvertToMP4(inputPath, opts); err != nil {
 		return err
-	}
-
-	// Delete original file
-	if err := os.Remove(inputPath); err != nil {
-		slog.Error("failed to delete .ts file", "error", err)
 	}
 
 	a.EmitClipsUpdate()
@@ -553,6 +498,17 @@ func (a *App) ConvertToMP4(inputPath string) error {
 
 func (a *App) EmitClipsUpdate() {
 	runtime.EventsEmit(a.ctx, "clips-updated")
+}
+
+// --- Internal methods ---
+
+func (a *App) setState(status Status, errorMsg string) {
+	a.state.Status = status
+	a.state.ErrorMessage = errorMsg
+
+	if a.OnStateChange != nil {
+		go a.OnStateChange(a.state)
+	}
 }
 
 // --- DTOs for Wails binding ---

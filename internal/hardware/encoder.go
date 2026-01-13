@@ -13,8 +13,7 @@ type Encoder struct {
 	GPUIndex  int // which GPU this encoder belongs to
 }
 
-// DetectAvailableEncoders returns a list of available hardware encoders.
-func DetectAvailableEncoders() []string {
+func DetectEncoders() []string {
 	slog.Debug("detecting encoders", "ffmpegPath", FFmpegPath)
 
 	cmd := utils.Command(FFmpegPath, "-hide_banner", "-encoders")
@@ -44,9 +43,9 @@ func DetectAvailableEncoders() []string {
 	return encoders
 }
 
-// DetectSystemEncoders returns all valid encoders found for the given GPUs.
+// TODO: rename, DetectEncoders bunu yapalım. üsttekini düşün.
 func DetectSystemEncoders(gpus GPUList) []Encoder {
-	available := DetectAvailableEncoders()
+	available := DetectEncoders()
 	availableMap := make(map[string]bool)
 	for _, enc := range available {
 		availableMap[enc] = true
@@ -64,6 +63,13 @@ func DetectSystemEncoders(gpus GPUList) []Encoder {
 			}
 		}
 	}
+
+	allEncoders = append(allEncoders, Encoder{
+		Name:      "libx264",
+		Codec:     "h264",
+		Available: true,
+		GPUIndex:  -1, // CPU
+	})
 
 	return allEncoders
 }
@@ -89,7 +95,6 @@ func getEncodersForVendor(vendor Vendor) []Encoder {
 	return nil
 }
 
-// GetEncoderArgs returns FFmpeg arguments for a specific encoder.
 func GetEncoderArgs(encoder *Encoder, captureVendor Vendor) []string {
 	if encoder == nil {
 		return CPUEncoderArgs()
@@ -148,7 +153,6 @@ func getQSVEncoderArgs(encoder *Encoder) []string {
 	}
 }
 
-// CPUEncoderArgs returns fallback CPU encoder arguments.
 func CPUEncoderArgs() []string {
 	return []string{
 		"-vf", "hwdownload,format=bgra,format=nv12",
@@ -159,7 +163,6 @@ func CPUEncoderArgs() []string {
 }
 
 // TODO
-// FindBestEncoder finds the best available encoder from the provided list
 func FindBestEncoder(encoders []Encoder) *Encoder {
 	for i := range encoders {
 		if encoders[i].Available {

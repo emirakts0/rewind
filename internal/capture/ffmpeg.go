@@ -26,7 +26,7 @@ func (b *FFmpegCommandBuilder) BuildArgs() []string {
 }
 
 func (b *FFmpegCommandBuilder) getHWDeviceArgs() []string {
-	gpu := b.config.GPU()
+	gpu := b.config.gpu
 	if gpu == nil {
 		return nil
 	}
@@ -47,7 +47,7 @@ func (b *FFmpegCommandBuilder) getInputArgs() []string {
 		drawMouse = 1
 	}
 
-	display := b.config.Display()
+	display := b.config.display
 	outputIdx := 0
 	if display != nil {
 		outputIdx = display.Index
@@ -62,8 +62,8 @@ func (b *FFmpegCommandBuilder) getInputArgs() []string {
 }
 
 func (b *FFmpegCommandBuilder) getEncoderArgs() []string {
-	encoder := b.config.Encoder()
-	gpu := b.config.GPU()
+	encoder := b.config.encoder
+	gpu := b.config.gpu
 
 	if encoder == nil || encoder.Name == "libx264" {
 		return hardware.CPUEncoderArgs()

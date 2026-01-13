@@ -17,7 +17,7 @@ func NewRing(size int) *Ring {
 	}
 }
 
-func (rb *Ring) Write(p []byte) (int, error) {
+func (rb *Ring) Write(p []byte) int {
 	rb.mu.Lock()
 	defer rb.mu.Unlock()
 
@@ -39,7 +39,7 @@ func (rb *Ring) Write(p []byte) (int, error) {
 		}
 	}
 
-	return n, nil
+	return n
 }
 
 func (rb *Ring) Snapshot() []byte {

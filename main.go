@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"log"
+	"log/slog"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -22,16 +23,14 @@ import (
 var assets embed.FS
 
 func getFFmpegPath() string {
-	// Try to find ffmpeg relative to the executable
 	exePath, err := os.Executable()
 	if err == nil {
 		exeDir := filepath.Dir(exePath)
-		// Check in same directory as executable
 		ffmpegPath := filepath.Join(exeDir, "ffmpeg.exe")
 		if _, err := os.Stat(ffmpegPath); err == nil {
 			return ffmpegPath
 		}
-		// Check in bin subdirectory
+
 		ffmpegPath = filepath.Join(exeDir, "bin", "ffmpeg.exe")
 		if _, err := os.Stat(ffmpegPath); err == nil {
 			return ffmpegPath
@@ -51,7 +50,6 @@ func getFFmpegPath() string {
 }
 
 func main() {
-	// Setup logging
 	logPath := logging.GetDefaultLogPath()
 	if err := logging.Setup(logPath, true); err != nil {
 		log.Printf("Failed to setup logging: %v", err)
@@ -59,7 +57,7 @@ func main() {
 	defer logging.Close()
 
 	ffmpegPath := getFFmpegPath()
-	log.Printf("Using FFmpeg: %s", ffmpegPath)
+	slog.Info("Using FFmpeg", ffmpegPath)
 
 	// Start pprof server
 	go func() {
@@ -69,13 +67,11 @@ func main() {
 		}
 	}()
 
-	// Create app instance
 	rewindApp := app.New(ffmpegPath)
 
-	// Set startup callback
 	rewindApp.OnStartup = func(ctx context.Context) {
 		if err := rewindApp.Initialize(); err != nil {
-			log.Printf("Failed to initialize: %v", err)
+			slog.Info("Failed to initialize", err)
 		}
 	}
 

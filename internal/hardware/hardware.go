@@ -14,7 +14,6 @@ type SystemInfo struct {
 	Encoders []Encoder // all available encoders from all GPUs
 }
 
-// GetEncoder finds an encoder by name
 func (s *SystemInfo) GetEncoder(name string) *Encoder {
 	for i := range s.Encoders {
 		if s.Encoders[i].Name == name {
@@ -24,7 +23,6 @@ func (s *SystemInfo) GetEncoder(name string) *Encoder {
 	return nil
 }
 
-// GetAvailableEncoders returns all available (working) encoders
 func (s *SystemInfo) GetAvailableEncoders() []Encoder {
 	var result []Encoder
 	for _, e := range s.Encoders {
@@ -35,12 +33,29 @@ func (s *SystemInfo) GetAvailableEncoders() []Encoder {
 	return result
 }
 
-// GetDisplay finds a display by index
 func (s *SystemInfo) GetDisplay(index int) *Display {
 	return s.Displays.FindByIndex(index)
 }
 
-// Detect performs full system hardware detection
+func (s *SystemInfo) GetEncodersForDisplay(displayIndex int) []Encoder {
+	display := s.GetDisplay(displayIndex)
+	targetGPU := -999
+	if display != nil {
+		targetGPU = display.GPUIndex
+	}
+
+	var compatible []Encoder
+	for _, e := range s.GetAvailableEncoders() {
+		// Include if it's CPU (-1) or matches the display's GPU
+		// Also include if no display is found (fallback to all?) - no, logic above implies only matching or CPU.
+		// If display is not found, targetGPU is -999, so only CPU encoders (Index -1) will match.
+		if e.GPUIndex == -1 || (targetGPU != -999 && e.GPUIndex == targetGPU) {
+			compatible = append(compatible, e)
+		}
+	}
+	return compatible
+}
+
 func Detect() (*SystemInfo, error) {
 	gpus, err := DetectGPUs()
 	if err != nil {
@@ -54,14 +69,6 @@ func Detect() (*SystemInfo, error) {
 
 	allEncoders := DetectSystemEncoders(gpus)
 
-	// Add CPU encoder as fallback
-	allEncoders = append(allEncoders, Encoder{
-		Name:      "libx264",
-		Codec:     "h264",
-		Available: true,
-		GPUIndex:  -1, // CPU
-	})
-
 	return &SystemInfo{
 		GPUs:     gpus,
 		Displays: displays,
@@ -69,7 +76,6 @@ func Detect() (*SystemInfo, error) {
 	}, nil
 }
 
-// Print logs all detected hardware information
 func (s *SystemInfo) Print() {
 	for _, g := range s.GPUs {
 		slog.Info("detected GPU",

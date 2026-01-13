@@ -7,13 +7,10 @@ import (
 	"rewind/internal/hardware"
 )
 
-// Config holds capture configuration
 type Config struct {
 	// Selected display index
 	DisplayIndex int
 
-	// Selected encoder name (e.g., "h264_nvenc", "h264_amf", "libx264")
-	// If empty, will use CPU encoding (libx264)
 	EncoderName string
 
 	// Capture settings
@@ -30,7 +27,6 @@ type Config struct {
 	gpu     *hardware.GPU
 }
 
-// DefaultConfig returns default capture configuration
 func DefaultConfig() *Config {
 	return &Config{
 		DisplayIndex:  0,
@@ -44,7 +40,6 @@ func DefaultConfig() *Config {
 	}
 }
 
-// Resolve validates and resolves the configuration against detected hardware
 func (c *Config) Resolve(sysInfo *hardware.SystemInfo) error {
 	slog.Debug("resolving capture config",
 		"displayIndex", c.DisplayIndex,
@@ -68,6 +63,7 @@ func (c *Config) Resolve(sysInfo *hardware.SystemInfo) error {
 	if c.EncoderName == "" {
 		// Default to CPU encoder
 		c.encoder = sysInfo.GetEncoder("libx264")
+		c.EncoderName = "libx264"
 	} else {
 		c.encoder = sysInfo.GetEncoder(c.EncoderName)
 		if c.encoder == nil {
@@ -97,30 +93,4 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("record seconds must be positive")
 	}
 	return nil
-}
-
-// Display returns the resolved display
-func (c *Config) Display() *hardware.Display {
-	return c.display
-}
-
-// Encoder returns the resolved encoder
-func (c *Config) Encoder() *hardware.Encoder {
-	return c.encoder
-}
-
-// GPU returns the GPU associated with the encoder (nil for CPU encoding)
-func (c *Config) GPU() *hardware.GPU {
-	return c.gpu
-}
-
-// EncoderDisplayName returns a human-readable encoder name
-func (c *Config) EncoderDisplayName() string {
-	if c.encoder == nil {
-		return "CPU (libx264)"
-	}
-	if c.gpu != nil {
-		return fmt.Sprintf("%s (%s)", c.encoder.Name, c.gpu.Name)
-	}
-	return c.encoder.Name
 }

@@ -76,7 +76,6 @@ type monitorInfoExW struct {
 
 const monitorInfoFPrimary = 0x00000001
 
-// DetectDisplays returns a list of all active displays.
 func DetectDisplays() (DisplayList, error) {
 	displays, err := detectDisplaysFromDDAGrab()
 	if err != nil && len(displays) <= 0 {
@@ -85,12 +84,10 @@ func DetectDisplays() (DisplayList, error) {
 
 	enrichPrimaryStatus(displays)
 
-	// Populate GPU index for each display
 	for _, d := range displays {
 		d.GPUIndex = GetMonitorGPUIndex(d.Index)
 	}
 
-	// Log detected displays
 	for _, d := range displays {
 		slog.Info("detected display",
 			"index", d.Index,
@@ -127,7 +124,6 @@ func detectDisplaysFromDDAGrab() (DisplayList, error) {
 	return displays, nil
 }
 
-// probeOutputIndex uses FFmpeg to get information about a specific output
 func probeOutputIndex(idx int) (*Display, error) {
 	cmd := utils.Command(FFmpegPath,
 		"-hide_banner",
@@ -177,7 +173,6 @@ func probeOutputIndex(idx int) (*Display, error) {
 	}, nil
 }
 
-// enrichPrimaryStatus adds primary display info from Windows API
 func enrichPrimaryStatus(displays DisplayList) {
 	type winDisplay struct {
 		width, height int

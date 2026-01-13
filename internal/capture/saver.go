@@ -1,4 +1,4 @@
-package output
+package capture
 
 import (
 	"bufio"
@@ -69,7 +69,7 @@ func (s *Saver) processSave(data []byte, opts *SaveOptions) {
 
 	// 2. Convert to MP4
 	if opts.ConvertToMP4 {
-		s.convertToMP4(tsPath, opts)
+		s.ConvertToMP4(tsPath, opts)
 	} else {
 		slog.Info("clip saved", "path", tsPath)
 	}
@@ -94,18 +94,20 @@ func (s *Saver) writeTempFile(data []byte, opts *SaveOptions) (string, error) {
 	return tsPath, nil
 }
 
-func (s *Saver) convertToMP4(tsPath string, opts *SaveOptions) {
+func (s *Saver) ConvertToMP4(tsPath string, opts *SaveOptions) error {
 	mp4Path := filepath.Join(s.outputDir, opts.Filename+".mp4")
 	absTs, _ := filepath.Abs(tsPath)
 	absMp4, _ := filepath.Abs(mp4Path)
 
 	cmd := hiddenexec.Command(s.ffmpegPath, "-y", "-i", absTs, "-c", "copy", absMp4)
-	if err := cmd.Run(); err == nil {
-		slog.Info("clip saved", "path", mp4Path)
-		if opts.DeleteTS {
-			os.Remove(absTs)
-		}
-	} else {
+	if err := cmd.Run(); err != nil {
 		slog.Error("conversion failed", "error", err)
+		return err
 	}
+
+	slog.Info("clip saved", "path", mp4Path)
+	if opts.DeleteTS {
+		os.Remove(absTs)
+	}
+	return nil
 }

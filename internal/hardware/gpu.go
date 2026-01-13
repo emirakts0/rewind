@@ -4,11 +4,11 @@ package hardware
 
 import (
 	"fmt"
+	"log/slog"
 	"rewind/internal/utils"
 	"strings"
 )
 
-// Vendor represents GPU vendor
 type Vendor string
 
 const (
@@ -18,7 +18,6 @@ const (
 	VendorUnknown Vendor = "unknown"
 )
 
-// GPU represents a graphics processing unit
 type GPU struct {
 	Index  int
 	Name   string
@@ -78,6 +77,7 @@ func detectGPUsFromWMIC() (GPUList, error) {
 		// Skip Microsoft Basic Display
 		if strings.Contains(strings.ToLower(name), "microsoft") ||
 			strings.Contains(strings.ToLower(name), "basic") {
+			slog.Info("Skipping basic display adapter", "name", name)
 			continue
 		}
 
