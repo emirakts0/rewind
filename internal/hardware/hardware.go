@@ -5,6 +5,41 @@ import (
 	"log/slog"
 )
 
+// FFmpegPath is the path to the FFmpeg executable.
+var FFmpegPath = "bin/ffmpeg.exe"
+
+type SystemInfo struct {
+	GPUs     GPUList
+	Displays DisplayList
+	Encoders []Encoder // all available encoders from all GPUs
+}
+
+// GetEncoder finds an encoder by name
+func (s *SystemInfo) GetEncoder(name string) *Encoder {
+	for i := range s.Encoders {
+		if s.Encoders[i].Name == name {
+			return &s.Encoders[i]
+		}
+	}
+	return nil
+}
+
+// GetAvailableEncoders returns all available (working) encoders
+func (s *SystemInfo) GetAvailableEncoders() []Encoder {
+	var result []Encoder
+	for _, e := range s.Encoders {
+		if e.Available {
+			result = append(result, e)
+		}
+	}
+	return result
+}
+
+// GetDisplay finds a display by index
+func (s *SystemInfo) GetDisplay(index int) *Display {
+	return s.Displays.FindByIndex(index)
+}
+
 // Detect performs full system hardware detection
 func Detect() (*SystemInfo, error) {
 	gpus, err := DetectGPUs()
@@ -12,21 +47,12 @@ func Detect() (*SystemInfo, error) {
 		return nil, fmt.Errorf("failed to detect GPUs: %w", err)
 	}
 
-	ValidateEncoders(gpus)
-
 	displays, err := DetectDisplays()
 	if err != nil {
 		return nil, fmt.Errorf("failed to detect displays: %w", err)
 	}
 
-	// Collect all encoders from all GPUs
-	var allEncoders []Encoder
-	for _, gpu := range gpus {
-		for _, enc := range gpu.Encoders {
-			enc.GPUIndex = gpu.Index
-			allEncoders = append(allEncoders, enc)
-		}
-	}
+	allEncoders := DetectSystemEncoders(gpus)
 
 	// Add CPU encoder as fallback
 	allEncoders = append(allEncoders, Encoder{

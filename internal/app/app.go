@@ -443,9 +443,7 @@ func (a *App) autoSelectEncoder() {
 		return
 	}
 
-	hardware.ValidateEncoders(a.sysInfo.GPUs)
-
-	best := hardware.FindBestEncoder(a.sysInfo.GPUs)
+	best := hardware.FindBestEncoder(a.sysInfo.Encoders)
 	if best != nil {
 		slog.Info("auto-selected encoder", "encoder", best.Name)
 		a.config.EncoderName = best.Name

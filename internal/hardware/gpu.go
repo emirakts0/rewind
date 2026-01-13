@@ -8,7 +8,37 @@ import (
 	"strings"
 )
 
-// DetectGPUs returns a list of all GPUs in the system.
+// Vendor represents GPU vendor
+type Vendor string
+
+const (
+	VendorNVIDIA  Vendor = "nvidia"
+	VendorAMD     Vendor = "amd"
+	VendorIntel   Vendor = "intel"
+	VendorUnknown Vendor = "unknown"
+)
+
+// GPU represents a graphics processing unit
+type GPU struct {
+	Index  int
+	Name   string
+	Vendor Vendor
+}
+
+func (g *GPU) String() string {
+	return fmt.Sprintf("[%d] %s (%s)", g.Index, g.Name, g.Vendor)
+}
+
+type GPUList []*GPU
+
+func (l GPUList) FindByIndex(index int) *GPU {
+	for _, g := range l {
+		if g.Index == index {
+			return g
+		}
+	}
+	return nil
+}
 func DetectGPUs() (GPUList, error) {
 	gpus, err := detectGPUsFromWMIC()
 	if err != nil || len(gpus) == 0 {
@@ -54,10 +84,9 @@ func detectGPUsFromWMIC() (GPUList, error) {
 		vendor := detectVendorFromName(name)
 
 		gpu := &GPU{
-			Index:    idx,
-			Name:     name,
-			Vendor:   vendor,
-			Encoders: getEncodersForVendor(vendor),
+			Index:  idx,
+			Name:   name,
+			Vendor: vendor,
 		}
 
 		gpus = append(gpus, gpu)
@@ -81,25 +110,4 @@ func detectVendorFromName(name string) Vendor {
 		return VendorIntel
 	}
 	return VendorUnknown
-}
-
-func getEncodersForVendor(vendor Vendor) []Encoder {
-	switch vendor {
-	case VendorNVIDIA:
-		return []Encoder{
-			{Name: "h264_nvenc", Codec: "h264"},
-			{Name: "hevc_nvenc", Codec: "hevc"},
-		}
-	case VendorAMD:
-		return []Encoder{
-			{Name: "h264_amf", Codec: "h264"},
-			{Name: "hevc_amf", Codec: "hevc"},
-		}
-	case VendorIntel:
-		return []Encoder{
-			{Name: "h264_qsv", Codec: "h264"},
-			{Name: "hevc_qsv", Codec: "hevc"},
-		}
-	}
-	return nil
 }

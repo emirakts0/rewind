@@ -6,6 +6,13 @@ import (
 	"strings"
 )
 
+type Encoder struct {
+	Name      string
+	Codec     string
+	Available bool
+	GPUIndex  int // which GPU this encoder belongs to
+}
+
 // DetectAvailableEncoders returns a list of available hardware encoders.
 func DetectAvailableEncoders() []string {
 	slog.Debug("detecting encoders", "ffmpegPath", FFmpegPath)
@@ -37,20 +44,49 @@ func DetectAvailableEncoders() []string {
 	return encoders
 }
 
-// ValidateEncoders checks which encoders are actually available in FFmpeg
-// and updates the GPU's encoder availability flags.
-func ValidateEncoders(gpus GPUList) {
+// DetectSystemEncoders returns all valid encoders found for the given GPUs.
+func DetectSystemEncoders(gpus GPUList) []Encoder {
 	available := DetectAvailableEncoders()
 	availableMap := make(map[string]bool)
 	for _, enc := range available {
 		availableMap[enc] = true
 	}
 
+	var allEncoders []Encoder
+
 	for _, gpu := range gpus {
-		for i := range gpu.Encoders {
-			gpu.Encoders[i].Available = availableMap[gpu.Encoders[i].Name]
+		potential := getEncodersForVendor(gpu.Vendor)
+		for _, enc := range potential {
+			enc.GPUIndex = gpu.Index
+			enc.Available = availableMap[enc.Name]
+			if enc.Available {
+				allEncoders = append(allEncoders, enc)
+			}
 		}
 	}
+
+	return allEncoders
+}
+
+func getEncodersForVendor(vendor Vendor) []Encoder {
+	switch vendor {
+	case VendorNVIDIA:
+		return []Encoder{
+			{Name: "h264_nvenc", Codec: "h264"},
+			{Name: "hevc_nvenc", Codec: "hevc"},
+		}
+	case VendorAMD:
+		return []Encoder{
+			{Name: "h264_amf", Codec: "h264"},
+			{Name: "hevc_amf", Codec: "hevc"},
+		}
+	case VendorIntel:
+		return []Encoder{
+			{Name: "h264_qsv", Codec: "h264"},
+			{Name: "hevc_qsv", Codec: "hevc"},
+		}
+	}
+	return nil
 }
 
 // GetEncoderArgs returns FFmpeg arguments for a specific encoder.
@@ -123,13 +159,11 @@ func CPUEncoderArgs() []string {
 }
 
 // TODO
-func FindBestEncoder(gpus GPUList) *Encoder {
-	for _, gpu := range gpus {
-		for i := range gpu.Encoders {
-			enc := &gpu.Encoders[i]
-			if enc.Available {
-				return enc
-			}
+// FindBestEncoder finds the best available encoder from the provided list
+func FindBestEncoder(encoders []Encoder) *Encoder {
+	for i := range encoders {
+		if encoders[i].Available {
+			return &encoders[i]
 		}
 	}
 	return nil
