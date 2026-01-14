@@ -12,6 +12,7 @@ import { BufferSlider, BUFFER_STEPS } from '@/components/buffer-slider'
 import { StatusBadge } from '@/components/status-badge'
 import { ConfigPanel } from '@/components/config-panel'
 import { ClipsDrawer } from '@/components/clips-drawer'
+import { TitleBar } from '@/components/title-bar'
 
 function App() {
     const [displays, setDisplays] = useState<DisplayInfo[]>([])
@@ -159,24 +160,19 @@ function App() {
     return (
         <div className="h-screen w-screen bg-transparent flex flex-col overflow-hidden select-none font-sans text-foreground">
 
-            {/* Header */}
-            <header className="px-4 pt-4 pb-2 flex items-center justify-between drag-handle cursor-move z-50">
-                <span className="font-extrabold text-lg tracking-tight bg-gradient-to-br from-primary via-primary/90 to-primary/70 bg-clip-text text-transparent drop-shadow-sm">
-                    Rewind
-                </span>
-                <div className="flex items-center gap-2">
-                    <StatusBadge status={isRecording ? 'recording' : 'idle'} />
-                    <ClipsDrawer />
-                </div>
-            </header>
+            {/* Custom Title Bar */}
+            <TitleBar>
+                <StatusBadge status={isRecording ? 'recording' : 'idle'} />
+                <ClipsDrawer />
+            </TitleBar>
 
             {/* Main Content Area */}
             <main className={cn(
                 "flex-1 flex flex-col items-center px-8 transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                configOpen ? "pt-6 gap-2" : "pt-[22vh] gap-8"
+                configOpen ? "pt-6 gap-2" : "pt-[14vh] gap-5"
             )}>
                 {/* Buffer Info */}
-                <div className="text-center space-y-4">
+                <div className="text-center space-y-3">
                     <div className="space-y-1">
                         <div className={cn(
                             "grid transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]",
@@ -184,14 +180,14 @@ function App() {
                         )}>
                             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest overflow-hidden">Buffer Length</p>
                         </div>
-                        <div className="flex items-baseline justify-center gap-1.5">
+                        <div className="flex items-baseline justify-center gap-2">
                             <span className={cn(
                                 "font-bold tabular-nums tracking-tighter transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                                configOpen ? "text-5xl" : "text-7xl"
+                                configOpen ? "text-6xl" : "text-8xl"
                             )}>
                                 {formatBufferDisplay(config.recordSeconds)}
                             </span>
-                            <span className="text-2xl text-muted-foreground font-light">
+                            <span className="text-3xl text-muted-foreground font-light">
                                 {getBufferUnit(config.recordSeconds)}
                             </span>
                         </div>

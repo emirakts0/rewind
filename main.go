@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"embed"
 	"log"
 	"log/slog"
@@ -13,10 +12,7 @@ import (
 	"rewind/internal/app"
 	"rewind/internal/logging"
 
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/options/windows"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 //go:embed all:frontend/dist
@@ -57,7 +53,7 @@ func main() {
 	defer logging.Close()
 
 	ffmpegPath := getFFmpegPath()
-	slog.Info("Using FFmpeg", ffmpegPath)
+	slog.Info("Using FFmpeg", "path", ffmpegPath)
 
 	// Start pprof server
 	go func() {
@@ -69,38 +65,38 @@ func main() {
 
 	rewindApp := app.New(ffmpegPath)
 
-	rewindApp.OnStartup = func(ctx context.Context) {
-		if err := rewindApp.Initialize(); err != nil {
-			slog.Info("Failed to initialize", err)
-		}
-	}
-
-	err := wails.Run(&options.App{
-		Title:         "Rewind",
-		Width:         420,
-		Height:        750,
-		MinWidth:      420,
-		MinHeight:     750,
-		MaxWidth:      420,
-		MaxHeight:     750,
-		DisableResize: true,
-		Frameless:     false,
-		AssetServer: &assetserver.Options{
-			Assets: assets,
+	appInstance := application.New(application.Options{
+		Name:        "Rewind",
+		Description: "Screen recording application with instant replay",
+		Services: []application.Service{
+			application.NewService(rewindApp),
 		},
-		BackgroundColour: &options.RGBA{R: 15, G: 15, B: 20, A: 255},
-		OnStartup:        rewindApp.Startup,
-		OnShutdown:       rewindApp.Shutdown,
-		Bind: []interface{}{
-			rewindApp,
+		Assets: application.AssetOptions{
+			Handler: application.AssetFileServerFS(assets),
 		},
-		Windows: &windows.Options{
-			WebviewIsTransparent: false,
-			WindowIsTranslucent:  false,
-			DisableWindowIcon:    false,
+		Mac: application.MacOptions{
+			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 	})
 
+	// Store the app instance for events
+	rewindApp.SetApp(appInstance)
+
+	appInstance.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title:            "Rewind",
+		Width:            420,
+		Height:           750,
+		MinWidth:         420,
+		MinHeight:        750,
+		MaxWidth:         420,
+		MaxHeight:        750,
+		DisableResize:    true,
+		Frameless:        true,
+		BackgroundColour: application.NewRGBA(15, 15, 20, 255),
+		URL:              "/",
+	})
+
+	err := appInstance.Run()
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -95,3 +95,77 @@ body {
   background: hsl(var(--muted-foreground) / 0.3);
   border-radius: 2px;
 }
+
+/* Custom Title Bar */
+.title-bar {
+  --wails-draggable: drag;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+  padding: 0 8px 0 12px;
+  background: linear-gradient(to bottom, hsl(158 20% 10%), hsl(158 24% 7%));
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+  flex-shrink: 0;
+}
+
+.title-bar-drag {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.title-bar-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.title-bar-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: hsl(var(--foreground));
+  user-select: none;
+}
+
+.title-bar-content {
+  --wails-draggable: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-bar-controls {
+  --wails-draggable: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.title-bar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.title-bar-btn:hover {
+  background: hsl(var(--secondary));
+  color: hsl(var(--foreground));
+}
+
+.title-bar-btn-close:hover {
+  background: hsl(var(--destructive));
+  color: white;
+}

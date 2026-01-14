@@ -16,7 +16,7 @@ import (
 	"rewind/internal/capture"
 	"rewind/internal/hardware"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // Status represents the current application state
@@ -66,6 +66,9 @@ type App struct {
 	mu  sync.RWMutex
 	ctx context.Context
 
+	// Wails v3 application instance
+	app *application.App
+
 	// Configuration
 	config     Config
 	ffmpegPath string
@@ -81,10 +84,9 @@ type App struct {
 	startTime    time.Time
 	lastSaveTime time.Time
 
-	// Event callbacks (for Wails)
+	// Event callbacks (legacy - kept for compatibility)
 	OnStateChange func(state State)
 	OnClipSaved   func(filename string)
-	OnStartup     func(ctx context.Context)
 }
 
 // New creates a new App instance
@@ -96,19 +98,28 @@ func New(ffmpegPath string) *App {
 	}
 }
 
-// Startup is called when the Wails app starts
-func (a *App) Startup(ctx context.Context) {
-	a.ctx = ctx
-	slog.Info("Rewind starting up...")
-
-	if a.OnStartup != nil {
-		a.OnStartup(ctx)
-	}
+// SetApp stores the Wails application instance for event emission
+func (a *App) SetApp(app *application.App) {
+	a.app = app
 }
 
-// Shutdown is called when the Wails app is closing
-func (a *App) Shutdown(ctx context.Context) {
-	slog.Info("Rewind shutting down...")
+// ServiceStartup is called when the Wails v3 app starts (lifecycle hook)
+func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
+	a.ctx = ctx
+	slog.Info("Rewind service starting up...")
+
+	// Initialize the app
+	if err := a.Initialize(); err != nil {
+		slog.Error("Failed to initialize", "error", err)
+		return err
+	}
+
+	return nil
+}
+
+// ServiceShutdown is called when the Wails v3 app is closing (lifecycle hook)
+func (a *App) ServiceShutdown() error {
+	slog.Info("Rewind service shutting down...")
 
 	// Stop recording if active
 	if a.IsRecording() {
@@ -119,6 +130,8 @@ func (a *App) Shutdown(ctx context.Context) {
 	if a.ringBuffer != nil {
 		a.ringBuffer.Clear()
 	}
+
+	return nil
 }
 
 // Initialize detects hardware and prepares the app
@@ -395,10 +408,17 @@ func (a *App) IsRecording() bool {
 
 func (a *App) SelectDirectory() (string, error) {
 	slog.Info("SelectDirectory called")
-	selection, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
-		Title:            "Select Output Directory",
-		DefaultDirectory: a.config.OutputDir,
-	})
+
+	if a.app == nil {
+		return "", fmt.Errorf("application not initialized")
+	}
+
+	selection, err := a.app.Dialog.OpenFile().
+		SetTitle("Select Output Directory").
+		SetDirectory(a.config.OutputDir).
+		CanChooseDirectories(true).
+		CanChooseFiles(false).
+		PromptForSingleSelection()
 
 	if err != nil {
 		return "", err
@@ -497,7 +517,9 @@ func (a *App) ConvertToMP4(inputPath string) error {
 }
 
 func (a *App) EmitClipsUpdate() {
-	runtime.EventsEmit(a.ctx, "clips-updated")
+	if a.app != nil {
+		a.app.Event.Emit("clips-updated")
+	}
 }
 
 // --- Internal methods ---

@@ -1,4 +1,4 @@
-// Wails bindings types
+// Wails v3 bindings types
 export interface DisplayInfo {
     index: number
     name: string
@@ -37,98 +37,82 @@ export interface State {
     recordingFor: number
 }
 
-// Wails runtime bindings
-declare global {
-    interface Window {
-        go: {
-            app: {
-                App: {
-                    Initialize(): Promise<void>
-                    GetDisplays(): Promise<DisplayInfo[]>
-                    GetEncoders(): Promise<EncoderInfo[]>
-                    GetConfig(): Promise<Config>
-                    SetConfig(config: Config): Promise<void>
-                    GetState(): Promise<State>
-                    Start(): Promise<void>
-                    Stop(): Promise<void>
-                    SaveClip(): Promise<string>
-                    IsRecording(): Promise<boolean>
-                    IsRecording(): Promise<boolean>
-                    SelectDirectory(): Promise<string>
-                    EstimateMemory(bitrate: string, seconds: number): Promise<string>
-                    GetClips(): Promise<Clip[]>
-                    OpenClip(path: string): Promise<void>
-                    ConvertToMP4(path: string): Promise<void>
-                    GetEncodersForDisplay(displayIndex: number): Promise<EncoderInfo[]>
-                }
-            }
-        }
-    }
-}
+// Import bindings from generated files (Wails v3 style)
+import * as AppBindings from '../../bindings/rewind/internal/app/app'
+
+// Re-export events from @wailsio/runtime
+export { Events } from '@wailsio/runtime'
 
 // API wrapper with error handling
 export const api = {
     async initialize(): Promise<void> {
-        return window.go.app.App.Initialize()
+        return AppBindings.Initialize()
     },
 
     async getDisplays(): Promise<DisplayInfo[]> {
-        return window.go.app.App.GetDisplays()
+        const displays = await AppBindings.GetDisplays()
+        return displays as unknown as DisplayInfo[]
     },
 
     async getEncoders(): Promise<EncoderInfo[]> {
-        return window.go.app.App.GetEncoders()
+        // v3 doesn't have a general GetEncoders, use GetEncodersForDisplay instead
+        const encoders = await AppBindings.GetEncodersForDisplay(0)
+        return encoders as unknown as EncoderInfo[]
     },
 
     async getConfig(): Promise<Config> {
-        return window.go.app.App.GetConfig()
+        const config = await AppBindings.GetConfig()
+        return config as unknown as Config
     },
 
     async setConfig(config: Config): Promise<void> {
-        return window.go.app.App.SetConfig(config)
+        return AppBindings.SetConfig(config as any)
     },
 
     async getState(): Promise<State> {
-        return window.go.app.App.GetState()
+        const state = await AppBindings.GetState()
+        return state as unknown as State
     },
 
     async start(): Promise<void> {
-        return window.go.app.App.Start()
+        return AppBindings.Start()
     },
 
     async stop(): Promise<void> {
-        return window.go.app.App.Stop()
+        return AppBindings.Stop()
     },
 
     async saveClip(): Promise<string> {
-        return window.go.app.App.SaveClip()
+        return AppBindings.SaveClip()
     },
 
     async isRecording(): Promise<boolean> {
-        return window.go.app.App.IsRecording()
+        return AppBindings.IsRecording()
     },
 
     async SelectDirectory(): Promise<string> {
-        return window.go.app.App.SelectDirectory()
+        return AppBindings.SelectDirectory()
     },
 
     async estimateMemory(bitrate: string, seconds: number): Promise<string> {
-        return window.go.app.App.EstimateMemory(bitrate, seconds)
+        return AppBindings.EstimateMemory(bitrate, seconds)
     },
 
     async getClips(): Promise<Clip[]> {
-        return window.go.app.App.GetClips()
+        const clips = await AppBindings.GetClips()
+        return clips as unknown as Clip[]
     },
 
     async openClip(path: string): Promise<void> {
-        return window.go.app.App.OpenClip(path)
+        return AppBindings.OpenClip(path)
     },
 
     async convertToMP4(path: string): Promise<void> {
-        return window.go.app.App.ConvertToMP4(path)
+        return AppBindings.ConvertToMP4(path)
     },
 
     async getEncodersForDisplay(displayIndex: number): Promise<EncoderInfo[]> {
-        return window.go.app.App.GetEncodersForDisplay(displayIndex)
+        const encoders = await AppBindings.GetEncodersForDisplay(displayIndex)
+        return encoders as unknown as EncoderInfo[]
     },
 }
