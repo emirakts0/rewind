@@ -33,4 +33,13 @@ fabric.properties
 /build
 /clips
 
+# Logs and profiling
+logs/
+*.log
+heap_profile
+cpu_profile
+
+# Wails v2 legacy (replaced by frontend/bindings)
+/frontend/wailsjs
+
 *.exe

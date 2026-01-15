@@ -158,7 +158,7 @@ function App() {
     }
 
     return (
-        <div className="h-screen w-screen bg-transparent flex flex-col overflow-hidden select-none font-sans text-foreground">
+        <div className="h-screen w-screen bg-transparent flex flex-col overflow-hidden select-none font-sans text-foreground relative">
 
             {/* Custom Title Bar */}
             <TitleBar>
@@ -223,7 +223,7 @@ function App() {
             </main>
 
             {/* Footer */}
-            <footer className="p-4 pt-2 space-y-3">
+            <footer className="p-4 pt-2 space-y-3 relative z-10">
                 <ConfigPanel
                     open={configOpen}
                     onOpenChange={setConfigOpen}

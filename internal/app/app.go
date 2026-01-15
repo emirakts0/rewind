@@ -87,6 +87,9 @@ type App struct {
 	// Event callbacks (legacy - kept for compatibility)
 	OnStateChange func(state State)
 	OnClipSaved   func(filename string)
+
+	// Tray state change callback
+	onTrayStateChange func()
 }
 
 // New creates a new App instance
@@ -101,6 +104,11 @@ func New(ffmpegPath string) *App {
 // SetApp stores the Wails application instance for event emission
 func (a *App) SetApp(app *application.App) {
 	a.app = app
+}
+
+// SetOnStateChange sets a callback for tray state updates
+func (a *App) SetOnStateChange(callback func()) {
+	a.onTrayStateChange = callback
 }
 
 // ServiceStartup is called when the Wails v3 app starts (lifecycle hook)
@@ -530,6 +538,11 @@ func (a *App) setState(status Status, errorMsg string) {
 
 	if a.OnStateChange != nil {
 		go a.OnStateChange(a.state)
+	}
+
+	// Notify tray manager
+	if a.onTrayStateChange != nil {
+		go a.onTrayStateChange()
 	}
 }
 
