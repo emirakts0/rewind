@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Save, Square, HardDrive } from 'lucide-react'
 import { api, type DisplayInfo, type EncoderInfo, type Config, type State } from '@/lib/wails'
-import { formatTime, cn } from '@/lib/utils'
+import { formatTime, formatBufferDisplay, getBufferUnit, cn } from '@/lib/utils'
 
 // Components
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ import { StatusBadge } from '@/components/status-badge'
 import { ConfigPanel } from '@/components/config-panel'
 import { ClipsDrawer } from '@/components/clips-drawer'
 import { TitleBar } from '@/components/title-bar'
+import { Kbd, KbdGroup } from '@/components/ui/kbd'
 
 function App() {
     const [displays, setDisplays] = useState<DisplayInfo[]>([])
@@ -33,19 +34,6 @@ function App() {
     })
     const [loading, setLoading] = useState(true)
     const [configOpen, setConfigOpen] = useState(false)
-
-    // Helper: format buffer display (e.g. 90 -> 1:30)
-    const formatBufferDisplay = (seconds: number) => {
-        if (seconds >= 60) {
-            const mins = Math.floor(seconds / 60)
-            const secs = seconds % 60
-            return secs > 0 ? `${mins}:${secs.toString().padStart(2, '0')}` : `${mins}`
-        }
-        return seconds.toString()
-    }
-
-    const getBufferUnit = (seconds: number) => seconds >= 60 ? 'min' : 'sec'
-
     const [estimatedMemory, setEstimatedMemory] = useState("~0MB")
 
     useEffect(() => {
@@ -67,10 +55,11 @@ function App() {
         const init = async () => {
             try {
                 await api.initialize()
-                const [d, e, c] = await Promise.all([
+                const [d, e, c, s] = await Promise.all([
                     api.getDisplays(),
                     api.getEncoders(),
-                    api.getConfig()
+                    api.getConfig(),
+                    api.getState()
                 ])
                 setDisplays(d || [])
                 setEncoders(e || [])
@@ -80,6 +69,11 @@ function App() {
                     Math.abs(curr - c.recordSeconds) < Math.abs(prev - c.recordSeconds) ? curr : prev
                 )
                 setConfig({ ...c, recordSeconds: nearestStep })
+
+                // Set initial state from Go backend (important when window reopens)
+                if (s) {
+                    setState(s)
+                }
             } catch (err) {
                 toast.error(`Init failed: ${err}`)
             } finally {
@@ -89,18 +83,32 @@ function App() {
         init()
     }, [])
 
-    // State Polling Effect
+    // State Management Effect (Events + Polling)
     useEffect(() => {
-        if (state.status !== 'recording') return
-        const interval = setInterval(async () => {
-            try {
-                const s = await api.getState()
-                setState(s)
-            } catch (err) {
-                console.error('Failed to get state:', err)
-            }
-        }, 500)
-        return () => clearInterval(interval)
+        // Listen for state changes from backend (Tray, Shortcuts)
+        const unsub = api.Events.On('state-changed', (event: any) => {
+            const s = event.data as State
+            console.log("State changed:", s)
+            setState(s)
+        })
+
+        // Poll for buffer usage when recording
+        let interval: NodeJS.Timeout
+        if (state.status === 'recording') {
+            interval = setInterval(async () => {
+                try {
+                    const s = await api.getState()
+                    setState(s)
+                } catch (err) {
+                    console.error('Failed to get state:', err)
+                }
+            }, 500)
+        }
+
+        return () => {
+            unsub()
+            if (interval) clearInterval(interval)
+        }
     }, [state.status])
 
     const handleStart = async () => {
@@ -212,13 +220,32 @@ function App() {
                     "grid transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]",
                     configOpen ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
                 )}>
-                    <p className="text-xs text-muted-foreground/60 text-center h-4 overflow-hidden">
-                        {isRecording
-                            ? `Buffer Usage: ${state.bufferUsage}% • Recording for: ${formatTime(state.recordingFor)}`
-                            : (
-                                <span className="animate-pulse">Drag or select duration</span>
-                            )}
-                    </p>
+                    <div className="flex flex-col items-center gap-3 overflow-hidden">
+                        <p className="text-xs text-muted-foreground/60 text-center h-4">
+                            {isRecording
+                                ? `Buffer Usage: ${state.bufferUsage}% • Recording for: ${formatTime(state.recordingFor)}`
+                                : " "
+                            }
+                        </p>
+
+                        {!isRecording && (
+                            <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 mt-2 opacity-60">
+                                <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider text-left">Start/Stop</span>
+                                <KbdGroup>
+                                    <Kbd>Ctrl</Kbd>
+                                    <span>+</span>
+                                    <Kbd>F9</Kbd>
+                                </KbdGroup>
+
+                                <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider text-left">Save Clip</span>
+                                <KbdGroup>
+                                    <Kbd>Ctrl</Kbd>
+                                    <span>+</span>
+                                    <Kbd>F10</Kbd>
+                                </KbdGroup>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </main>
 

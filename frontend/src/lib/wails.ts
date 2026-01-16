@@ -39,11 +39,9 @@ export interface State {
 
 // Import bindings from generated files (Wails v3 style)
 import * as AppBindings from '../../bindings/rewind/internal/app/app'
+import { Events } from "@wailsio/runtime"
 
-// Re-export events from @wailsio/runtime
-export { Events } from '@wailsio/runtime'
-
-// API wrapper with error handling
+// API wrapper
 export const api = {
     async initialize(): Promise<void> {
         return AppBindings.Initialize()
@@ -115,4 +113,17 @@ export const api = {
         const encoders = await AppBindings.GetEncodersForDisplay(displayIndex)
         return encoders as unknown as EncoderInfo[]
     },
+
+    // Event listeners
+    Events: {
+        On: (eventName: string, callback: (data: any) => void) => {
+            return Events.On(eventName, callback)
+        },
+        Off: (eventName: string) => {
+            return Events.Off(eventName)
+        },
+        Emit: (eventName: string, data?: any) => {
+            return Events.Emit(eventName, data)
+        }
+    }
 }

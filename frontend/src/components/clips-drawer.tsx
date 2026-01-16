@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from "framer-motion"
 import { FolderOpen, FileVideo, Clock, RefreshCcw, FileDigit, ArrowLeft, MoreHorizontal, Film, Loader2 } from 'lucide-react'
 import { api, type Clip } from '@/lib/wails'
-import { cn } from '@/lib/utils'
+import { cn, formatBytes } from '@/lib/utils'
 
 import {
     Sheet,
@@ -57,18 +57,6 @@ export function ClipsDrawer() {
         } catch (err) {
             toast.error("Failed to open clip")
         }
-    }
-
-    const formatSize = (bytes: number) => {
-        if (bytes === 0) return '0 B'
-        const k = 1024
-        const sizes = ['B', 'KB', 'MB', 'GB']
-        const i = Math.floor(Math.log(bytes) / Math.log(k))
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
-    }
-
-    const formatDate = (dateStr: string) => {
-        return new Date(dateStr).toLocaleString()
     }
 
     const getIcon = (name: string) => {
@@ -157,16 +145,16 @@ export function ClipsDrawer() {
                                             <div className="h-10 w-10 rounded-md bg-secondary/50 flex items-center justify-center shrink-0">
                                                 {getIcon(clip.name)}
                                             </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-medium text-sm truncate">{clip.name}</p>
-                                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground/80 mt-0.5">
-                                                    <span className="flex items-center gap-1 bg-background/50 px-1.5 py-0.5 rounded">
-                                                        <Clock className="w-2.5 h-2.5" />
-                                                        {formatDate(clip.modTime)}
-                                                    </span>
-                                                    <span className="font-mono">{formatSize(clip.size)}</span>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-medium text-sm truncate">{clip.name}</p>
+                                                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground/80 mt-0.5">
+                                                        <span className="flex items-center gap-1 bg-background/50 px-1.5 py-0.5 rounded">
+                                                            <Clock className="w-2.5 h-2.5" />
+                                                            {new Date(clip.modTime).toLocaleString()}
+                                                        </span>
+                                                        <span className="font-mono">{formatBytes(clip.size)}</span>
+                                                    </div>
                                                 </div>
-                                            </div>
                                         </button>
 
                                         {/* Actions for TS files */}

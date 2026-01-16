@@ -117,10 +117,10 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	slog.Info("Rewind service starting up...")
 
 	// Initialize the app
-	if err := a.Initialize(); err != nil {
-		slog.Error("Failed to initialize", "error", err)
-		return err
-	}
+	// if err := a.Initialize(); err != nil {
+	// 	slog.Error("Failed to initialize", "error", err)
+	// 	return err
+	// }
 
 	return nil
 }
@@ -143,9 +143,16 @@ func (a *App) ServiceShutdown() error {
 }
 
 // Initialize detects hardware and prepares the app
+// Safe to call multiple times - will skip if already initialized
 func (a *App) Initialize() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	// Skip if already initialized
+	if a.sysInfo != nil {
+		slog.Info("app already initialized, skipping")
+		return nil
+	}
 
 	hardware.FFmpegPath = a.ffmpegPath
 
@@ -538,6 +545,11 @@ func (a *App) setState(status Status, errorMsg string) {
 
 	if a.OnStateChange != nil {
 		go a.OnStateChange(a.state)
+	}
+
+	// Notify frontend
+	if a.app != nil {
+		a.app.Event.Emit("state-changed", a.state)
 	}
 
 	// Notify tray manager

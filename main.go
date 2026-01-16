@@ -90,10 +90,12 @@ func (t *TrayManager) Setup() {
 			t.window.Show()
 			t.window.Focus()
 		}
+		t.UpdateShowHideLabel()
 	})
 
 	// Right click - show menu
 	t.systray.OnRightClick(func() {
+		t.UpdateShowHideLabel()
 		t.systray.OpenMenu()
 	})
 }
@@ -134,13 +136,18 @@ func (t *TrayManager) createMenu() {
 	t.showHideItem.OnClick(func(ctx *application.Context) {
 		if t.window.IsVisible() {
 			t.window.Hide()
-			t.showHideItem.SetLabel("Show Window")
 		} else {
 			t.window.Show()
 			t.window.Focus()
-			t.showHideItem.SetLabel("Hide Window")
 		}
-		t.menu.Update()
+		t.UpdateShowHideLabel()
+	})
+
+	// Reload UI (for testing - simulates frontend crash recovery)
+	reloadItem := t.menu.Add("Reload UI")
+	reloadItem.OnClick(func(ctx *application.Context) {
+		t.window.Reload()
+		slog.Info("UI reloaded - frontend should fetch state from backend")
 	})
 
 	t.menu.AddSeparator()
@@ -176,6 +183,15 @@ func (t *TrayManager) UpdateState() {
 	t.menu.Update()
 }
 
+func (t *TrayManager) UpdateShowHideLabel() {
+	if t.window.IsVisible() {
+		t.showHideItem.SetLabel("Hide Window")
+	} else {
+		t.showHideItem.SetLabel("Show Window")
+	}
+	t.menu.Update()
+}
+
 func main() {
 	logPath := logging.GetDefaultLogPath()
 	if err := logging.Setup(logPath, true); err != nil {
@@ -206,9 +222,6 @@ func main() {
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
 		},
-		Mac: application.MacOptions{
-			ApplicationShouldTerminateAfterLastWindowClosed: false, // Keep running in tray
-		},
 	})
 
 	// Store the app instance for events
@@ -237,6 +250,29 @@ func main() {
 	// Setup system tray
 	trayManager := NewTrayManager(appInstance, rewindApp, window)
 	trayManager.Setup()
+
+	// Hook to update tray menu when window is hidden via close button
+	window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+		trayManager.UpdateShowHideLabel()
+	})
+
+	// Global Key Bindings
+	// Start/Stop Recording: Ctrl + F9
+	appInstance.KeyBinding.Add("Ctrl+F9", func(window application.Window) {
+		if rewindApp.IsRecording() {
+			rewindApp.Stop()
+		} else {
+			rewindApp.Start()
+		}
+		trayManager.UpdateState()
+	})
+
+	// Save Clip: Ctrl + F10
+	appInstance.KeyBinding.Add("Ctrl+F10", func(window application.Window) {
+		if rewindApp.IsRecording() {
+			rewindApp.SaveClip()
+		}
+	})
 
 	// Set callback for state changes to update tray
 	rewindApp.SetOnStateChange(func() {
