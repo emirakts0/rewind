@@ -89,7 +89,7 @@ type App struct {
 	OnClipSaved   func(filename string)
 
 	// Tray state change callback
-	onTrayStateChange func()
+	onTrayStateChange func(State)
 }
 
 // New creates a new App instance
@@ -107,7 +107,7 @@ func (a *App) SetApp(app *application.App) {
 }
 
 // SetOnStateChange sets a callback for tray state updates
-func (a *App) SetOnStateChange(callback func()) {
+func (a *App) SetOnStateChange(callback func(State)) {
 	a.onTrayStateChange = callback
 }
 
@@ -554,7 +554,7 @@ func (a *App) setState(status Status, errorMsg string) {
 
 	// Notify tray manager
 	if a.onTrayStateChange != nil {
-		go a.onTrayStateChange()
+		go a.onTrayStateChange(a.state)
 	}
 }
 

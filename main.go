@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	"rewind/internal/app"
+	"rewind/internal/input"
 	"rewind/internal/logging"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -167,6 +168,7 @@ func (t *TrayManager) createMenu() {
 
 func (t *TrayManager) UpdateState() {
 	isRecording := t.rewindApp.IsRecording()
+	slog.Info("updating tray state", "recording", isRecording)
 
 	if isRecording {
 		t.systray.SetIcon(appIconRecording)
@@ -181,6 +183,7 @@ func (t *TrayManager) UpdateState() {
 	}
 
 	t.menu.Update()
+	t.systray.SetMenu(t.menu)
 }
 
 func (t *TrayManager) UpdateShowHideLabel() {
@@ -256,26 +259,30 @@ func main() {
 		trayManager.UpdateShowHideLabel()
 	})
 
-	// Global Key Bindings
-	// Start/Stop Recording: Ctrl + F9
-	appInstance.KeyBinding.Add("Ctrl+F9", func(window application.Window) {
+	// Global Hotkeys (works system-wide)
+	hkManager := input.NewHotkeyManager()
+
+	// Start/Stop: Ctrl+F9
+	hkManager.Register(1, func() {
 		if rewindApp.IsRecording() {
 			rewindApp.Stop()
 		} else {
 			rewindApp.Start()
 		}
-		trayManager.UpdateState()
 	})
 
-	// Save Clip: Ctrl + F10
-	appInstance.KeyBinding.Add("Ctrl+F10", func(window application.Window) {
+	// Save Clip: Ctrl+F10
+	hkManager.Register(2, func() {
 		if rewindApp.IsRecording() {
 			rewindApp.SaveClip()
 		}
 	})
 
+	hkManager.Start()
+	defer hkManager.Stop()
+
 	// Set callback for state changes to update tray
-	rewindApp.SetOnStateChange(func() {
+	rewindApp.SetOnStateChange(func(state app.State) {
 		trayManager.UpdateState()
 	})
 
