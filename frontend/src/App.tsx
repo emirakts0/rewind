@@ -228,23 +228,21 @@ function App() {
                             }
                         </p>
 
-                        {!isRecording && (
-                            <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 mt-2 opacity-60">
-                                <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider text-left">Start/Stop</span>
-                                <KbdGroup>
-                                    <Kbd>Ctrl</Kbd>
-                                    <span>+</span>
-                                    <Kbd>F9</Kbd>
-                                </KbdGroup>
+                        <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 mt-2 opacity-60 items-center">
+                            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider text-left">Start/Stop</span>
+                            <KbdGroup>
+                                <Kbd>Ctrl</Kbd>
+                                <span>+</span>
+                                <Kbd>F9</Kbd>
+                            </KbdGroup>
 
-                                <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider text-left">Save Clip</span>
-                                <KbdGroup>
-                                    <Kbd>Ctrl</Kbd>
-                                    <span>+</span>
-                                    <Kbd>F10</Kbd>
-                                </KbdGroup>
-                            </div>
-                        )}
+                            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider text-left">Save Clip</span>
+                            <KbdGroup>
+                                <Kbd>Ctrl</Kbd>
+                                <span>+</span>
+                                <Kbd>F10</Kbd>
+                            </KbdGroup>
+                        </div>
                     </div>
                 </div>
             </main>
@@ -265,7 +263,7 @@ function App() {
                 <div className={cn(
                     "transition-all ease-[cubic-bezier(0.22,1,0.36,1)] transform origin-bottom",
                     configOpen
-                        ? "duration-[1000ms] opacity-0 translate-y-4 scale-90 max-h-0 overflow-hidden pointer-events-none mt-0"
+                        ? "duration-1000 opacity-0 translate-y-4 scale-90 max-h-0 overflow-hidden pointer-events-none mt-0"
                         : "duration-700 opacity-100 translate-y-0 scale-100 max-h-24 mt-3"
                 )}>
                     {/* Action buttons */}
@@ -288,7 +286,7 @@ function App() {
                             </Button>
                             <Button
                                 onClick={handleStop}
-                                className="flex-[3] h-14 rounded-xl bg-destructive hover:bg-[#ff6659] text-destructive-foreground font-semibold text-base shadow-lg shadow-destructive/20 hover:shadow-destructive/30 transition-all hover:scale-[1.01] active:scale-[0.99]"
+                                className="flex-[3] h-14 rounded-xl bg-destructive hover:bg-destructive text-destructive-foreground font-semibold text-base shadow-lg shadow-destructive/20 transition-all hover:scale-[1.01] active:scale-[0.99]"
                             >
                                 <Square className="w-5 h-5" />
                             </Button>
@@ -297,7 +295,7 @@ function App() {
                 </div>
             </footer>
 
-            <Toaster position="top-center" richColors />
+            <Toaster position="top-center" />
         </div>
     )
 }

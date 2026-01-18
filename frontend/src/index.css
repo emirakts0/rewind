@@ -4,54 +4,55 @@
 
 @layer base {
   :root {
-    /* Background derived from #2D4039 but much darker for deep dark mode */
-    --background: 158 24% 7%;
-    --foreground: 46 60% 86%;
-    /* #F2E7C4 Cream */
 
-    /* Card derived from #2D4039, slightly darker than original but lighter than bg */
-    --card: 158 20% 12%;
+    --background: 249 10% 14%;
+
+    --foreground: 46 60% 86%;
+
+
+    --card: 249 10% 18%;
     --card-foreground: 46 60% 86%;
 
-    /* Popover/Panels can be the original #2D4039 or slightly adjusted */
-    --popover: 158 17% 16%;
+
+    --popover: 249 10% 18%;
     --popover-foreground: 46 60% 86%;
 
-    /* Primary: #04BF8A Bright Green */
-    --primary: 163 94% 38%;
-    --primary-foreground: 46 60% 86%;
-    /* Cream text on green button */
 
-    /* Secondary: #2D4039 Original Dark Green/Charcoal */
-    --secondary: 158 17% 21%;
+    --primary: 39 87% 63%;
+    --primary-foreground: 249 10% 14%;
+
+
+    --secondary: 249 6% 24%;
     --secondary-foreground: 46 60% 86%;
 
-    /* Muted: Desaturated version of secondary or the tile red #BF4A3F as muted accent */
-    --muted: 158 15% 15%;
-    --muted-foreground: 158 10% 60%;
 
-    /* Accent: #04BF8A for hover states etc */
-    --accent: 158 17% 25%;
+    --muted: 249 10% 22%;
+    --muted-foreground: 249 10% 65%;
+
+
+    --accent: 250 11% 22%;
     --accent-foreground: 46 60% 86%;
 
-    /* Destructive: #F24535 Bright Red */
-    --destructive: 5 89% 58%;
+
+    --destructive: 16 100% 19%;
     --destructive-foreground: 46 60% 86%;
 
-    --border: 158 17% 21%;
-    --input: 158 17% 21%;
-    --ring: 163 94% 38%;
-    /* Primary Green Ring */
+
+    --border: 249 10% 22%;
+
+    --input: 249 10% 22%;
+
+    --ring: 39 87% 63%;
 
     --radius: 0.75rem;
 
-    /* Success uses Primary Green #04BF8A */
-    --success: 163 94% 38%;
-    --success-foreground: 158 24% 5%;
 
-    /* Action Button: #F2E7C4 Cream */
-    --action: 46 60% 86%;
-    --action-foreground: 158 24% 7%;
+    --success: 39 87% 63%;
+    --success-foreground: 249 10% 14%;
+
+
+    --action: 39 87% 63%;
+    --action-foreground: 249 10% 14%;
   }
 }
 
@@ -80,6 +81,8 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
+
+  background: linear-gradient(to top, hsl(249 10% 18%), hsl(249 10% 14%) 30%);
 }
 
 /* Custom scrollbar */
@@ -104,7 +107,7 @@ body {
   justify-content: space-between;
   height: 40px;
   padding: 0 8px 0 12px;
-  background: linear-gradient(to bottom, hsl(158 20% 10%), hsl(158 24% 7%));
+  background: linear-gradient(to bottom, hsl(249 10% 18%), hsl(249 10% 14%));
   border-bottom: 1px solid hsl(var(--border) / 0.5);
   flex-shrink: 0;
 }
@@ -161,11 +164,54 @@ body {
 }
 
 .title-bar-btn:hover {
+
   background: hsl(var(--secondary));
   color: hsl(var(--foreground));
 }
 
 .title-bar-btn-close:hover {
+
   background: hsl(var(--destructive));
   color: white;
+}
+
+
+[data-sonner-toaster] {
+  top: 48px !important;
+}
+
+
+[data-sonner-toast] {
+  background: hsl(var(--muted)) !important;
+  border-color: hsl(var(--border)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+[data-sonner-toast] [data-description] {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+
+[data-sonner-toast][data-type="success"] {
+  background: hsl(152 80% 10%) !important;
+  border-color: hsl(152 60% 25%) !important;
+  color: hsl(152 60% 70%) !important;
+}
+
+[data-sonner-toast][data-type="success"] [data-description] {
+  color: hsl(152 40% 60%) !important;
+}
+
+
+[data-sonner-toast][data-type="error"] {
+  background: hsl(var(--destructive)) !important;
+  border-color: hsl(16 80% 30%) !important;
+  color: hsl(var(--destructive-foreground)) !important;
+}
+
+/* Info toast */
+[data-sonner-toast][data-type="info"] {
+  background: hsl(var(--muted)) !important;
+  border-color: hsl(var(--border)) !important;
+  color: hsl(var(--foreground)) !important;
 }

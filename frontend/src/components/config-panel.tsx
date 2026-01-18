@@ -81,7 +81,7 @@ export function ConfigPanel({
                                 variant="outline"
                                 size="sm"
                                 onClick={onSelectDirectory}
-                                className="w-full justify-start text-left font-normal bg-secondary/30 border-border/50 h-9 truncate px-3 text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                                className="w-full justify-start text-left font-normal bg-accent border-border/50 h-9 truncate px-3 text-muted-foreground hover:text-foreground hover:bg-accent/80"
                                 title={config.outputDir}
                             >
                                 {config.outputDir || "./clips"}
@@ -95,11 +95,11 @@ export function ConfigPanel({
                             </TabsList>
 
                             <TabsContent value="video" className="space-y-4 animate-in slide-in-from-left-2 duration-300 fade-in-0 mt-0">
-                                <ScrollArea className="h-[210px] -mx-4 w-[calc(100%+2rem)]">
-                                    <div className="space-y-4 px-4 py-2">
+                                <ScrollArea className="h-[280px] -mx-4 w-[calc(100%+2rem)]">
+                                    <div className="space-y-3 px-4 py-2">
 
                                         {/* Display Select */}
-                                        <div className="space-y-2">
+                                        <div className="space-y-1.5">
                                             <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                                                 <Monitor className="w-3 h-3" /> Display
                                             </label>
@@ -107,7 +107,7 @@ export function ConfigPanel({
                                                 value={config.displayIndex.toString()}
                                                 onValueChange={(v) => setConfig(prev => ({ ...prev, displayIndex: parseInt(v) }))}
                                             >
-                                                <SelectTrigger className="h-9 bg-secondary/30 border-border/50 focus:ring-1 focus:ring-primary/20">
+                                                <SelectTrigger className="h-9 bg-accent border-border/50 focus:ring-1 focus:ring-primary/20">
                                                     <SelectValue placeholder="Select display" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -121,7 +121,7 @@ export function ConfigPanel({
                                         </div>
 
                                         {/* Encoder Select */}
-                                        <div className="space-y-2">
+                                        <div className="space-y-1.5">
                                             <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                                                 <Cpu className="w-3 h-3" /> Encoder
                                             </label>
@@ -129,7 +129,7 @@ export function ConfigPanel({
                                                 value={config.encoderName}
                                                 onValueChange={(v) => setConfig(prev => ({ ...prev, encoderName: v }))}
                                             >
-                                                <SelectTrigger className="h-9 bg-secondary/30 border-border/50">
+                                                <SelectTrigger className="h-9 bg-accent border-border/50">
                                                     <SelectValue placeholder="Select encoder" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -179,7 +179,7 @@ export function ConfigPanel({
 
                                         {/* FPS & Quality */}
                                         <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
+                                            <div className="space-y-1.5">
                                                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                                                     <Timer className="w-3 h-3" /> FPS
                                                 </label>
@@ -187,7 +187,7 @@ export function ConfigPanel({
                                                     value={config.fps.toString()}
                                                     onValueChange={(v) => setConfig(prev => ({ ...prev, fps: parseInt(v) }))}
                                                 >
-                                                    <SelectTrigger className="h-9 bg-secondary/30 border-border/50">
+                                                    <SelectTrigger className="h-9 bg-accent border-border/50">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -197,7 +197,7 @@ export function ConfigPanel({
                                                     </SelectContent>
                                                 </Select>
                                             </div>
-                                            <div className="space-y-2">
+                                            <div className="space-y-1.5">
                                                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                                                     <Sparkles className="w-3 h-3" /> Quality
                                                 </label>
@@ -205,7 +205,7 @@ export function ConfigPanel({
                                                     value={config.bitrate}
                                                     onValueChange={(v) => setConfig(prev => ({ ...prev, bitrate: v }))}
                                                 >
-                                                    <SelectTrigger className="h-9 bg-secondary/30 border-border/50">
+                                                    <SelectTrigger className="h-9 bg-accent border-border/50">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -222,8 +222,8 @@ export function ConfigPanel({
                             </TabsContent>
 
                             <TabsContent value="audio" className="animate-in slide-in-from-right-2 duration-300 fade-in-0 mt-0">
-                                <div className="h-[210px] flex items-center justify-center">
-                                    <div className="p-6 border border-dashed border-border/50 rounded-lg bg-secondary/10">
+                                <div className="h-[280px] flex items-center justify-center relative overflow-hidden">
+                                    <div className="p-6 border border-dashed border-border/50 rounded-lg">
                                         <div className="flex flex-col items-center justify-center text-center space-y-3">
                                             <div className="w-10 h-10 rounded-full bg-secondary/20 flex items-center justify-center">
                                                 <Mic className="w-5 h-5 text-muted-foreground" />

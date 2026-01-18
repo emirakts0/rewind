@@ -64,12 +64,28 @@ export function ClipsDrawer() {
         return <FileVideo className="h-5 w-5 text-primary" />
     }
 
+    const [newClipName, setNewClipName] = useState<string | null>(null)
+
     const handleConvert = async (path: string) => {
         setConverting(prev => ({ ...prev, [path]: true }))
         try {
             await api.convertToMP4(path)
-            toast.success("Converted successfully")
-            fetchClips()
+
+            // Extract expected new filename for highlight animation (replace .ts with .mp4)
+            const originalFileName = path.split(/[/\\]/).pop() || ''
+            const newFileName = originalFileName.replace(/\.ts$/, '.mp4')
+            setNewClipName(newFileName)
+
+            await fetchClips()
+
+            // Scroll to top to show the new file
+            const scrollArea = document.querySelector('[data-radix-scroll-area-viewport]')
+            if (scrollArea) {
+                scrollArea.scrollTo({ top: 0, behavior: 'smooth' })
+            }
+
+            // Clear highlight after animation
+            setTimeout(() => setNewClipName(null), 2000)
         } catch (err) {
             toast.error("Conversion failed")
             console.error(err)
@@ -89,16 +105,16 @@ export function ClipsDrawer() {
                     <FolderOpen className="h-5 w-5" />
                 </Button>
             </SheetTrigger>
-            <SheetContent className="w-screen max-w-none h-full border-l-0 [&>button]:hidden pt-5 px-6">
-                <SheetHeader className="mb-4">
-                    <SheetTitle className="flex items-center gap-4 text-xl font-black tracking-tighter">
+            <SheetContent className="w-screen max-w-none h-full border-l-0 [&>button]:hidden p-0 flex flex-col gap-0">
+                <SheetHeader className="px-4 py-2 border-b border-border/50 flex-shrink-0" style={{ background: 'linear-gradient(to bottom, hsl(249 10% 18%), hsl(249 10% 14%))' }}>
+                    <SheetTitle className="flex items-center gap-3 text-sm font-bold tracking-tight h-6">
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground -ml-2"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
                             onClick={() => setOpen(false)}
                         >
-                            <ArrowLeft className="h-5 w-5" />
+                            <ArrowLeft className="h-4 w-4" />
                         </Button>
                         <span>Library</span>
                         <Button
@@ -116,14 +132,14 @@ export function ClipsDrawer() {
                     </SheetDescription>
                 </SheetHeader>
 
-                <ScrollArea className="h-[calc(100vh-80px)] -mx-6">
+                <ScrollArea className="flex-1">
                     {clips.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                             <FileVideo className="h-12 w-12 opacity-10 mb-4" />
                             <p className="text-sm font-medium">No clips found</p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 px-4 pb-10">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 px-4 pt-3 pb-4">
                             <AnimatePresence mode="popLayout" initial={false}>
                                 {clips.map((clip) => (
                                     <motion.div
@@ -136,7 +152,10 @@ export function ClipsDrawer() {
                                             opacity: { duration: 0.2 },
                                             layout: { duration: 0.3, type: "spring", bounce: 0.2 }
                                         }}
-                                        className="group relative flex items-center gap-3 p-3 rounded-lg border border-border/40 bg-card/50 hover:bg-accent/50"
+                                        className={cn(
+                                            "group relative flex items-center gap-3 p-3 rounded-lg border border-border/40 bg-card/50 hover:bg-accent/50 transition-all duration-500",
+                                            newClipName === clip.name && "animate-pulse ring-2 ring-primary/50"
+                                        )}
                                     >
                                         <button
                                             onClick={() => handleOpenClip(clip.path)}
@@ -145,16 +164,16 @@ export function ClipsDrawer() {
                                             <div className="h-10 w-10 rounded-md bg-secondary/50 flex items-center justify-center shrink-0">
                                                 {getIcon(clip.name)}
                                             </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="font-medium text-sm truncate">{clip.name}</p>
-                                                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground/80 mt-0.5">
-                                                        <span className="flex items-center gap-1 bg-background/50 px-1.5 py-0.5 rounded">
-                                                            <Clock className="w-2.5 h-2.5" />
-                                                            {new Date(clip.modTime).toLocaleString()}
-                                                        </span>
-                                                        <span className="font-mono">{formatBytes(clip.size)}</span>
-                                                    </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-medium text-sm truncate">{clip.name}</p>
+                                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground/80 mt-0.5">
+                                                    <span className="flex items-center gap-1 bg-background/50 px-1.5 py-0.5 rounded">
+                                                        <Clock className="w-2.5 h-2.5" />
+                                                        {new Date(clip.modTime).toLocaleString()}
+                                                    </span>
+                                                    <span className="font-mono">{formatBytes(clip.size)}</span>
                                                 </div>
+                                            </div>
                                         </button>
 
                                         {/* Actions for TS files */}
