@@ -2,7 +2,7 @@ import { Slider } from '@/components/ui/slider'
 import { cn } from '@/lib/utils'
 
 export const BUFFER_STEPS = [15, 30, 60, 90, 120, 180, 300]
-const BUFFER_LABELS = ['15s', '30s', '1m', '1.5m', '2m', '3m', '5m']
+const BUFFER_LABELS = ['15s', '30s', '60s', '90s', '2m', '3m', '5m']
 
 interface BufferSliderProps {
     value: number

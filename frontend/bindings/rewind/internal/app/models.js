@@ -120,6 +120,20 @@ export class Config {
              */
             this["convertToMP4"] = false;
         }
+        if (!("microphoneDevice" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["microphoneDevice"] = "";
+        }
+        if (!("systemAudioDevice" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["systemAudioDevice"] = "";
+        }
 
         Object.assign(this, $$source);
     }
@@ -171,6 +185,13 @@ export class DisplayInfo {
              * @type {number}
              */
             this["height"] = 0;
+        }
+        if (!("refreshRate" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["refreshRate"] = 0;
         }
         if (!("isPrimary" in $$source)) {
             /**

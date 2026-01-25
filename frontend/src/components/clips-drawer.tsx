@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from "framer-motion"
-import { FolderOpen, FileVideo, Clock, RefreshCcw, FileDigit, ArrowLeft, MoreHorizontal, Film, Loader2 } from 'lucide-react'
+import { FolderOpen, FileVideo, Clock, RefreshCcw, FileDigit, ArrowLeft, MoreHorizontal, Film, Loader2, FolderArchive } from 'lucide-react'
 import { api, type Clip } from '@/lib/wails'
 import { cn, formatBytes } from '@/lib/utils'
 
@@ -47,6 +47,7 @@ export function ClipsDrawer() {
 
     useEffect(() => {
         if (open) {
+            toast.dismiss()
             fetchClips()
         }
     }, [open])
@@ -59,8 +60,9 @@ export function ClipsDrawer() {
         }
     }
 
-    const getIcon = (name: string) => {
-        if (name.endsWith('.ts')) return <FileDigit className="h-5 w-5 text-amber-500/70" />
+    const getIcon = (clip: Clip) => {
+        if (clip.isRawFolder) return <FolderArchive className="h-5 w-5 text-amber-500/70" />
+        if (clip.name.endsWith('.ts')) return <FileDigit className="h-5 w-5 text-amber-500/70" />
         return <FileVideo className="h-5 w-5 text-primary" />
     }
 
@@ -71,21 +73,24 @@ export function ClipsDrawer() {
         try {
             await api.convertToMP4(path)
 
-            // Extract expected new filename for highlight animation (replace .ts with .mp4)
+            // Extract expected new filename for highlight animation
             const originalFileName = path.split(/[/\\]/).pop() || ''
-            const newFileName = originalFileName.replace(/\.ts$/, '.mp4')
+            // For raw folders: folder name + .mp4, for .ts files: replace .ts with .mp4
+            const newFileName = originalFileName.endsWith('.ts')
+                ? originalFileName.replace(/\.ts$/, '.mp4')
+                : originalFileName + '.mp4'
             setNewClipName(newFileName)
 
-            await fetchClips()
-
-            // Scroll to top to show the new file
+            // Scroll to top first so animation is visible
             const scrollArea = document.querySelector('[data-radix-scroll-area-viewport]')
             if (scrollArea) {
                 scrollArea.scrollTo({ top: 0, behavior: 'smooth' })
             }
 
+            await fetchClips()
+
             // Clear highlight after animation
-            setTimeout(() => setNewClipName(null), 2000)
+            setTimeout(() => setNewClipName(null), 1000)
         } catch (err) {
             toast.error("Conversion failed")
             console.error(err)
@@ -106,12 +111,13 @@ export function ClipsDrawer() {
                 </Button>
             </SheetTrigger>
             <SheetContent className="w-screen max-w-none h-full border-l-0 [&>button]:hidden p-0 flex flex-col gap-0">
-                <SheetHeader className="px-4 py-2 border-b border-border/50 flex-shrink-0" style={{ background: 'linear-gradient(to bottom, hsl(249 10% 18%), hsl(249 10% 14%))' }}>
+                <SheetHeader className="px-4 py-2 border-b border-border/50 flex-shrink-0" style={{ background: 'linear-gradient(to bottom, hsl(249 10% 18%), hsl(249 10% 14%))', '--wails-draggable': 'drag' } as React.CSSProperties}>
                     <SheetTitle className="flex items-center gap-3 text-sm font-bold tracking-tight h-6">
                         <Button
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}
                             onClick={() => setOpen(false)}
                         >
                             <ArrowLeft className="h-4 w-4" />
@@ -121,6 +127,7 @@ export function ClipsDrawer() {
                             variant="ghost"
                             size="icon"
                             className="h-6 w-6 text-muted-foreground hover:text-foreground ml-auto"
+                            style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}
                             onClick={fetchClips}
                             disabled={loading}
                         >
@@ -145,16 +152,26 @@ export function ClipsDrawer() {
                                     <motion.div
                                         key={clip.path}
                                         layout
-                                        initial={{ opacity: 0, scale: 0.9 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        exit={{ opacity: 0, scale: 0.9 }}
+                                        initial={{ opacity: 0, scale: 0.8, y: 20 }}
+                                        animate={{
+                                            opacity: 1,
+                                            scale: 1,
+                                            y: 0,
+                                            boxShadow: newClipName === clip.name
+                                                ? "0 0 24px 6px rgba(245, 158, 11, 0.35)"
+                                                : "none"
+                                        }}
+                                        exit={{ opacity: 0, scale: 0.8, y: -10 }}
                                         transition={{
-                                            opacity: { duration: 0.2 },
-                                            layout: { duration: 0.3, type: "spring", bounce: 0.2 }
+                                            opacity: { duration: 0.25 },
+                                            scale: { duration: 0.4, type: "spring", stiffness: 200, damping: 20 },
+                                            y: { duration: 0.4, type: "spring", stiffness: 200, damping: 20 },
+                                            layout: { duration: 0.5, type: "spring", stiffness: 150, damping: 25 },
+                                            boxShadow: { duration: 0.8, ease: "easeOut" }
                                         }}
                                         className={cn(
-                                            "group relative flex items-center gap-3 p-3 rounded-lg border border-border/40 bg-card/50 hover:bg-accent/50 transition-all duration-500",
-                                            newClipName === clip.name && "animate-pulse ring-2 ring-primary/50"
+                                            "group relative flex items-center gap-3 p-3 rounded-lg border border-border/40 bg-card/50 hover:bg-accent/50 transition-colors duration-300",
+                                            newClipName === clip.name && "border-amber-500/50 bg-amber-500/10"
                                         )}
                                     >
                                         <button
@@ -162,7 +179,7 @@ export function ClipsDrawer() {
                                             className="flex-1 flex items-center gap-3 min-w-0 text-left"
                                         >
                                             <div className="h-10 w-10 rounded-md bg-secondary/50 flex items-center justify-center shrink-0">
-                                                {getIcon(clip.name)}
+                                                {getIcon(clip)}
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <p className="font-medium text-sm truncate">{clip.name}</p>
@@ -172,12 +189,15 @@ export function ClipsDrawer() {
                                                         {new Date(clip.modTime).toLocaleString()}
                                                     </span>
                                                     <span className="font-mono">{formatBytes(clip.size)}</span>
+                                                    {clip.isRawFolder && clip.durationSec && (
+                                                        <span className="text-amber-500/80">RAW • {clip.durationSec}s</span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </button>
 
-                                        {/* Actions for TS files */}
-                                        {clip.name.endsWith('.ts') && (
+                                        {/* Actions for raw folders and TS files */}
+                                        {(clip.isRawFolder || clip.name.endsWith('.ts')) && (
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button
@@ -207,7 +227,7 @@ export function ClipsDrawer() {
                         </div>
                     )}
                 </ScrollArea>
-            </SheetContent>
-        </Sheet>
+            </SheetContent >
+        </Sheet >
     )
 }

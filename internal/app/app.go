@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"rewind/internal/audio"
 	"rewind/internal/buffer"
 	"rewind/internal/capture"
 	"rewind/internal/hardware"
@@ -31,25 +32,33 @@ const (
 
 // Config represents user-configurable settings
 type Config struct {
-	DisplayIndex  int    `json:"displayIndex"`
-	EncoderName   string `json:"encoderName"`
-	FPS           int    `json:"fps"`
-	Bitrate       string `json:"bitrate"`
-	RecordSeconds int    `json:"recordSeconds"`
-	OutputDir     string `json:"outputDir"`
-	ConvertToMP4  bool   `json:"convertToMP4"`
+	DisplayIndex      int    `json:"displayIndex"`
+	EncoderName       string `json:"encoderName"`
+	FPS               int    `json:"fps"`
+	Bitrate           string `json:"bitrate"`
+	RecordSeconds     int    `json:"recordSeconds"`
+	OutputDir         string `json:"outputDir"`
+	ConvertToMP4      bool   `json:"convertToMP4"`
+	MicrophoneDevice  string `json:"microphoneDevice"`
+	MicVolume         int    `json:"micVolume"` // 0-200
+	SystemAudioDevice string `json:"systemAudioDevice"`
+	SysVolume         int    `json:"sysVolume"` // 0-200
 }
 
 // DefaultConfig returns sensible defaults
 func DefaultConfig() Config {
 	return Config{
-		DisplayIndex:  0,
-		EncoderName:   "", // auto-select
-		FPS:           60,
-		Bitrate:       "15M",
-		RecordSeconds: 30,
-		OutputDir:     "./clips",
-		ConvertToMP4:  true,
+		DisplayIndex:      0,
+		EncoderName:       "", // auto-select
+		FPS:               60,
+		Bitrate:           "15M",
+		RecordSeconds:     30,
+		OutputDir:         "./clips",
+		ConvertToMP4:      true,
+		MicrophoneDevice:  "",
+		MicVolume:         100,
+		SystemAudioDevice: "",
+		SysVolume:         100,
 	}
 }
 
@@ -79,7 +88,8 @@ type App struct {
 	// Runtime state
 	state        State
 	capturer     *capture.Capturer
-	ringBuffer   *buffer.Ring
+	audioManager *audio.CaptureManager
+	ringBuffer   *buffer.Buffer
 	saver        *capture.Saver
 	startTime    time.Time
 	lastSaveTime time.Time
@@ -188,11 +198,12 @@ func (a *App) GetDisplays() []DisplayInfo {
 	var displays []DisplayInfo
 	for _, d := range a.sysInfo.Displays {
 		displays = append(displays, DisplayInfo{
-			Index:     d.Index,
-			Name:      d.FriendlyName,
-			Width:     d.Width,
-			Height:    d.Height,
-			IsPrimary: d.IsPrimary,
+			Index:       d.Index,
+			Name:        d.FriendlyName,
+			Width:       d.Width,
+			Height:      d.Height,
+			RefreshRate: d.RefreshRate,
+			IsPrimary:   d.IsPrimary,
 		})
 	}
 	return displays
@@ -226,6 +237,36 @@ func (a *App) GetEncodersForDisplay(displayIndex int) []EncoderInfo {
 	}
 
 	return result
+}
+
+// GetInputDevices returns input (microphone) devices
+func (a *App) GetInputDevices() []string {
+	devices, err := audio.ListInputDevices()
+	if err != nil {
+		slog.Error("failed to list input devices", "error", err)
+		return nil
+	}
+
+	var names []string
+	for _, d := range devices {
+		names = append(names, d.Name)
+	}
+	return names
+}
+
+// GetOutputDevices returns output (playback) devices for loopback capture
+func (a *App) GetOutputDevices() []string {
+	devices, err := audio.ListOutputDevices()
+	if err != nil {
+		slog.Error("failed to list output devices", "error", err)
+		return nil
+	}
+
+	var names []string
+	for _, d := range devices {
+		names = append(names, d.Name)
+	}
+	return names
 }
 
 // GetConfig returns the current configuration
@@ -277,7 +318,7 @@ func (a *App) GetState() State {
 	state := a.state
 	if a.ringBuffer != nil && a.state.Status == StatusRecording {
 		total := a.ringBuffer.Size()
-		used := a.ringBuffer.UsedBytes()
+		used := a.ringBuffer.Len()
 		if total > 0 {
 			state.BufferUsage = (used * 100) / total
 		}
@@ -308,6 +349,8 @@ func (a *App) Start() error {
 	captureCfg.RecordSeconds = a.config.RecordSeconds
 	captureCfg.OutputDir = a.config.OutputDir
 	captureCfg.FFmpegPath = a.ffmpegPath
+	captureCfg.MicrophoneDevice = a.config.MicrophoneDevice
+	captureCfg.SystemAudioDevice = a.config.SystemAudioDevice
 
 	if err := captureCfg.Resolve(a.sysInfo); err != nil {
 		return fmt.Errorf("config resolution failed: %w", err)
@@ -315,7 +358,7 @@ func (a *App) Start() error {
 
 	// Create components
 	bufSize := capture.CalculateBufferSize(a.config.Bitrate, a.config.RecordSeconds)
-	a.ringBuffer = buffer.NewRing(bufSize)
+	a.ringBuffer = buffer.New(bufSize)
 	a.saver = capture.NewSaver(a.ffmpegPath, a.config.OutputDir)
 
 	capturer, err := capture.NewCapturer(captureCfg)
@@ -346,6 +389,25 @@ func (a *App) Start() error {
 		"encoder", a.config.EncoderName,
 	)
 
+	if a.config.MicrophoneDevice != "" || a.config.SystemAudioDevice != "" {
+		micID, _ := audio.FindDeviceIDByName(a.config.MicrophoneDevice)
+		sysID, _ := audio.FindDeviceIDByName(a.config.SystemAudioDevice)
+
+		if micID != "" || sysID != "" {
+			am, err := audio.NewCaptureManager()
+			if err != nil {
+				slog.Error("failed to create audio manager", "error", err)
+			} else {
+				a.audioManager = am
+				if err := am.StartCapture(micID, sysID, a.config.MicVolume, a.config.SysVolume, a.config.RecordSeconds); err != nil {
+					slog.Error("failed to start audio capture", "error", err)
+					a.audioManager.Close()
+					a.audioManager = nil
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -361,6 +423,11 @@ func (a *App) Stop() error {
 	if a.capturer != nil {
 		a.capturer.Stop()
 		a.capturer = nil
+	}
+
+	if a.audioManager != nil {
+		a.audioManager.Close()
+		a.audioManager = nil
 	}
 
 	// Release memory immediately
@@ -393,15 +460,21 @@ func (a *App) SaveClip() (string, error) {
 
 	filename := fmt.Sprintf("clip_%s", time.Now().Format("20060102_150405"))
 	opts := capture.DefaultSaveOptions(filename)
-	opts.ConvertToMP4, opts.DeleteTS = a.config.ConvertToMP4, a.config.ConvertToMP4 // Only delete TS if we converted to MP4
+	opts.ConvertToMP4, opts.DeleteTS = a.config.ConvertToMP4, a.config.ConvertToMP4
+	opts.DurationSec = a.config.RecordSeconds
 
-	if err := a.saver.Save(a.ringBuffer, opts); err != nil {
+	var audioSrc capture.Snapshotter
+	if a.audioManager != nil && a.audioManager.IsRunning() {
+		audioSrc = a.audioManager.GetBuffer()
+	}
+
+	if err := a.saver.SaveWithAudio(a.ringBuffer, audioSrc, opts); err != nil {
 		return "", fmt.Errorf("save failed: %w", err)
 	}
 
 	a.lastSaveTime = time.Now()
 
-	ext := ".ts"
+	ext := "/"
 	if a.config.ConvertToMP4 {
 		ext = ".mp4"
 	}
@@ -443,19 +516,40 @@ func (a *App) SelectDirectory() (string, error) {
 }
 
 // EstimateMemory calculates the estimated buffer size based on bitrate and duration
-func (a *App) EstimateMemory(bitrate string, seconds int) string {
-	size := capture.CalculateBufferSize(bitrate, seconds)
+func (a *App) EstimateMemory(bitrate string, seconds int, hasMic bool, hasSys bool) string {
+	videoSize := capture.CalculateBufferSize(bitrate, seconds)
+
+	audioSize := 0
+	activeStreams := 0
+
+	if hasMic {
+		activeStreams++
+		audioSize += audio.CalculateStreamBufferSize(2)
+	}
+	if hasSys {
+		activeStreams++
+		audioSize += audio.CalculateStreamBufferSize(2)
+	}
+
+	if activeStreams > 0 {
+		audioSize += audio.CalculateMixedBufferSize(seconds)
+	}
+
+	totalSize := videoSize + audioSize
+
 	// Convert to MegaBytes (1024^2)
-	mb := float64(size) / (1024 * 1024)
+	mb := float64(totalSize) / (1024 * 1024)
 	return fmt.Sprintf("~%.0fMB", mb)
 }
 
-// Clip represents a saved video file
+// Clip represents a saved video file or raw clip folder
 type Clip struct {
-	Name    string    `json:"name"`
-	Path    string    `json:"path"`
-	Size    int64     `json:"size"`
-	ModTime time.Time `json:"modTime"`
+	Name        string    `json:"name"`
+	Path        string    `json:"path"`
+	Size        int64     `json:"size"`
+	ModTime     time.Time `json:"modTime"`
+	IsRawFolder bool      `json:"isRawFolder"`
+	DurationSec int       `json:"durationSec,omitempty"`
 }
 
 // GetClips returns a list of saved clips in the output directory.
@@ -471,9 +565,42 @@ func (a *App) GetClips() ([]Clip, error) {
 
 	var clips []Clip
 	for _, f := range files {
+		absPath, _ := filepath.Abs(filepath.Join(a.config.OutputDir, f.Name()))
+
 		if f.IsDir() {
+			metadata, err := capture.ReadMetadata(absPath)
+			if err != nil {
+				continue
+			}
+
+			var folderSize int64
+			filepath.Walk(absPath, func(_ string, info os.FileInfo, _ error) error {
+				if info != nil && !info.IsDir() {
+					folderSize += info.Size()
+				}
+				return nil
+			})
+
+			info, _ := f.Info()
+			modTime := time.Now()
+			if info != nil {
+				modTime = info.ModTime()
+			}
+			if !metadata.CreatedAt.IsZero() {
+				modTime = metadata.CreatedAt
+			}
+
+			clips = append(clips, Clip{
+				Name:        f.Name(),
+				Path:        absPath,
+				Size:        folderSize,
+				ModTime:     modTime,
+				IsRawFolder: true,
+				DurationSec: metadata.DurationSec,
+			})
 			continue
 		}
+
 		ext := filepath.Ext(f.Name())
 		if ext != ".mp4" && ext != ".ts" {
 			continue
@@ -484,12 +611,12 @@ func (a *App) GetClips() ([]Clip, error) {
 			continue
 		}
 
-		absPath, _ := filepath.Abs(filepath.Join(a.config.OutputDir, f.Name()))
 		clips = append(clips, Clip{
-			Name:    f.Name(),
-			Path:    absPath,
-			Size:    info.Size(),
-			ModTime: info.ModTime(),
+			Name:        f.Name(),
+			Path:        absPath,
+			Size:        info.Size(),
+			ModTime:     info.ModTime(),
+			IsRawFolder: false,
 		})
 	}
 
@@ -503,28 +630,41 @@ func (a *App) OpenClip(path string) error {
 	return cmd.Start()
 }
 
-// ConvertToMP4 converts a .ts clip to .mp4 and deletes the original .ts file
+// ConvertToMP4 converts a raw clip folder or .ts file to .mp4
 func (a *App) ConvertToMP4(inputPath string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
 	if a.saver == nil {
-		return fmt.Errorf("saver not initialized")
+		a.saver = capture.NewSaver(a.ffmpegPath, a.config.OutputDir)
 	}
 
-	if filepath.Ext(inputPath) != ".ts" {
-		return fmt.Errorf("input file must be .ts")
+	// Check if input is a directory (raw folder) or a file
+	info, err := os.Stat(inputPath)
+	if err != nil {
+		return fmt.Errorf("failed to stat input: %w", err)
 	}
 
-	// Extract filename without extension for options
-	baseName := filepath.Base(inputPath)
-	nameWithoutExt := baseName[:len(baseName)-len(filepath.Ext(baseName))]
+	if info.IsDir() {
+		// Raw folder conversion
+		if err := a.saver.ConvertRawFolder(inputPath, true); err != nil {
+			return err
+		}
+	} else {
+		// Legacy .ts file conversion
+		if filepath.Ext(inputPath) != ".ts" {
+			return fmt.Errorf("input file must be .ts")
+		}
 
-	opts := capture.DefaultSaveOptions(nameWithoutExt)
-	opts.ConvertToMP4, opts.DeleteTS = true, true
+		baseName := filepath.Base(inputPath)
+		nameWithoutExt := baseName[:len(baseName)-len(filepath.Ext(baseName))]
 
-	if err := a.saver.ConvertToMP4(inputPath, opts); err != nil {
-		return err
+		opts := capture.DefaultSaveOptions(nameWithoutExt)
+		opts.ConvertToMP4, opts.DeleteTS = true, true
+
+		if err := a.saver.ConvertToMP4(inputPath, opts); err != nil {
+			return err
+		}
 	}
 
 	a.EmitClipsUpdate()
@@ -562,11 +702,12 @@ func (a *App) setState(status Status, errorMsg string) {
 
 // DisplayInfo is display info for frontend
 type DisplayInfo struct {
-	Index     int    `json:"index"`
-	Name      string `json:"name"`
-	Width     int    `json:"width"`
-	Height    int    `json:"height"`
-	IsPrimary bool   `json:"isPrimary"`
+	Index       int    `json:"index"`
+	Name        string `json:"name"`
+	Width       int    `json:"width"`
+	Height      int    `json:"height"`
+	RefreshRate int    `json:"refreshRate"`
+	IsPrimary   bool   `json:"isPrimary"`
 }
 
 // EncoderInfo is encoder info for frontend

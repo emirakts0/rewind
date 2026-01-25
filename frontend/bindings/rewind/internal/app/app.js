@@ -39,10 +39,12 @@ export function EmitClipsUpdate() {
  * EstimateMemory calculates the estimated buffer size based on bitrate and duration
  * @param {string} bitrate
  * @param {number} seconds
+ * @param {boolean} hasMic
+ * @param {boolean} hasSys
  * @returns {$CancellablePromise<string>}
  */
-export function EstimateMemory(bitrate, seconds) {
-    return $Call.ByID(2746090786, bitrate, seconds);
+export function EstimateMemory(bitrate, seconds, hasMic, hasSys) {
+    return $Call.ByID(2746090786, bitrate, seconds, hasMic, hasSys);
 }
 
 /**
@@ -87,17 +89,38 @@ export function GetEncodersForDisplay(displayIndex) {
 }
 
 /**
- * GetState returns the current state
- * @returns {$CancellablePromise<$models.State>}
+ * GetInputDevices returns input (microphone) devices
+ * @returns {$CancellablePromise<string[]>}
  */
-export function GetState() {
-    return $Call.ByID(1908551158).then(/** @type {($result: any) => any} */(($result) => {
+export function GetInputDevices() {
+    return $Call.ByID(474762054).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType7($result);
     }));
 }
 
 /**
+ * GetOutputDevices returns output (playback) devices for loopback capture
+ * @returns {$CancellablePromise<string[]>}
+ */
+export function GetOutputDevices() {
+    return $Call.ByID(1488240455).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType7($result);
+    }));
+}
+
+/**
+ * GetState returns the current state
+ * @returns {$CancellablePromise<$models.State>}
+ */
+export function GetState() {
+    return $Call.ByID(1908551158).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType8($result);
+    }));
+}
+
+/**
  * Initialize detects hardware and prepares the app
+ * Safe to call multiple times - will skip if already initialized
  * @returns {$CancellablePromise<void>}
  */
 export function Initialize() {
@@ -155,6 +178,15 @@ export function SetConfig(cfg) {
 }
 
 /**
+ * SetOnStateChange sets a callback for tray state updates
+ * @param {any} callback
+ * @returns {$CancellablePromise<void>}
+ */
+export function SetOnStateChange(callback) {
+    return $Call.ByID(2855291673, callback);
+}
+
+/**
  * Start begins recording
  * @returns {$CancellablePromise<void>}
  */
@@ -178,4 +210,5 @@ const $$createType3 = $models.DisplayInfo.createFrom;
 const $$createType4 = $Create.Array($$createType3);
 const $$createType5 = $models.EncoderInfo.createFrom;
 const $$createType6 = $Create.Array($$createType5);
-const $$createType7 = $models.State.createFrom;
+const $$createType7 = $Create.Array($Create.Any);
+const $$createType8 = $models.State.createFrom;

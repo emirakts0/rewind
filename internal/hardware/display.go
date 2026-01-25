@@ -21,6 +21,7 @@ type Display struct {
 	IsPrimary    bool
 	Width        int
 	Height       int
+	RefreshRate  int
 	X, Y         int
 	GPUIndex     int
 }
@@ -57,9 +58,10 @@ func (l DisplayList) FindPrimary() *Display {
 }
 
 var (
-	user32                  = syscall.NewLazyDLL("user32.dll")
-	procEnumDisplayMonitors = user32.NewProc("EnumDisplayMonitors")
-	procGetMonitorInfoW     = user32.NewProc("GetMonitorInfoW")
+	user32                   = syscall.NewLazyDLL("user32.dll")
+	procEnumDisplayMonitors  = user32.NewProc("EnumDisplayMonitors")
+	procGetMonitorInfoW      = user32.NewProc("GetMonitorInfoW")
+	procEnumDisplaySettingsW = user32.NewProc("EnumDisplaySettingsW")
 )
 
 type rect struct {
@@ -92,6 +94,7 @@ func DetectDisplays() (DisplayList, error) {
 		slog.Info("detected display",
 			"index", d.Index,
 			"resolution", fmt.Sprintf("%dx%d", d.Width, d.Height),
+			"refreshRate", d.RefreshRate,
 			"primary", d.IsPrimary,
 			"name", d.Name,
 		)
@@ -206,8 +209,61 @@ func enrichPrimaryStatus(displays DisplayList) {
 			if d.Width == wd.width && d.Height == wd.height {
 				d.IsPrimary = wd.isPrimary
 				d.Name = wd.deviceName
+				d.RefreshRate = getDisplayRefreshRate(wd.deviceName)
 				break
 			}
 		}
 	}
+}
+
+// todo: MAKE IT SIMPLE
+type devModeW struct {
+	DmDeviceName         [32]uint16
+	DmSpecVersion        uint16
+	DmDriverVersion      uint16
+	DmSize               uint16
+	DmDriverExtra        uint16
+	DmFields             uint32
+	DmPositionX          int32
+	DmPositionY          int32
+	DmDisplayOrientation uint32
+	DmDisplayFixedOutput uint32
+	DmColor              int16
+	DmDuplex             int16
+	DmYResolution        int16
+	DmTTOption           int16
+	DmCollate            int16
+	DmFormName           [32]uint16
+	DmLogPixels          uint16
+	DmBitsPerPel         uint32
+	DmPelsWidth          uint32
+	DmPelsHeight         uint32
+	DmDisplayFlags       uint32
+	DmDisplayFrequency   uint32
+	// ...
+}
+
+const enumCurrentSettings = 0xFFFFFFFF
+
+func getDisplayRefreshRate(deviceName string) int {
+	if deviceName == "" {
+		return 60 // Default fallback ???? IS IT RIGHT ???
+	}
+
+	deviceNameUTF16, _ := syscall.UTF16PtrFromString(deviceName)
+
+	var dm devModeW
+	dm.DmSize = uint16(unsafe.Sizeof(dm))
+
+	ret, _, _ := procEnumDisplaySettingsW.Call(
+		uintptr(unsafe.Pointer(deviceNameUTF16)),
+		uintptr(enumCurrentSettings),
+		uintptr(unsafe.Pointer(&dm)),
+	)
+
+	if ret != 0 && dm.DmDisplayFrequency > 0 {
+		return int(dm.DmDisplayFrequency)
+	}
+
+	return 60 // Default fallback ???? IS IT RIGHT ???
 }

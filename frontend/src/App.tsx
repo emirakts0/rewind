@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Save, Square, HardDrive } from 'lucide-react'
 import { api, type DisplayInfo, type EncoderInfo, type Config, type State } from '@/lib/wails'
-import { formatTime, formatBufferDisplay, getBufferUnit, cn } from '@/lib/utils'
+import { formatTime, formatBufferDisplay, getBufferUnit, formatError, cn } from '@/lib/utils'
 
 // Components
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,8 @@ import { Kbd, KbdGroup } from '@/components/ui/kbd'
 function App() {
     const [displays, setDisplays] = useState<DisplayInfo[]>([])
     const [encoders, setEncoders] = useState<EncoderInfo[]>([])
+    const [inputDevices, setInputDevices] = useState<string[]>([])
+    const [outputDevices, setOutputDevices] = useState<string[]>([])
     const [config, setConfig] = useState<Config>({
         displayIndex: 0,
         encoderName: '',
@@ -25,7 +27,11 @@ function App() {
         bitrate: '15M',
         recordSeconds: 30,
         outputDir: './clips',
-        convertToMP4: true
+        convertToMP4: true,
+        microphoneDevice: '',
+        micVolume: 100,
+        systemAudioDevice: '',
+        sysVolume: 100,
     })
     const [state, setState] = useState<State>({
         status: 'idle',
@@ -37,10 +43,15 @@ function App() {
     const [estimatedMemory, setEstimatedMemory] = useState("~0MB")
 
     useEffect(() => {
-        api.estimateMemory(config.bitrate, config.recordSeconds)
+        api.estimateMemory(
+            config.bitrate,
+            config.recordSeconds,
+            config.microphoneDevice !== '',
+            config.systemAudioDevice !== ''
+        )
             .then(setEstimatedMemory)
             .catch(err => console.error(err))
-    }, [config.bitrate, config.recordSeconds])
+    }, [config.bitrate, config.recordSeconds, config.microphoneDevice, config.systemAudioDevice])
 
     // Update encoders when display changes
     useEffect(() => {
@@ -55,14 +66,18 @@ function App() {
         const init = async () => {
             try {
                 await api.initialize()
-                const [d, e, c, s] = await Promise.all([
+                const [d, e, inputs, outputs, c, s] = await Promise.all([
                     api.getDisplays(),
                     api.getEncoders(),
+                    api.getInputDevices(),
+                    api.getOutputDevices(),
                     api.getConfig(),
                     api.getState()
                 ])
                 setDisplays(d || [])
                 setEncoders(e || [])
+                setInputDevices(inputs || [])
+                setOutputDevices(outputs || [])
 
                 // Snap to nearest buffer step
                 const nearestStep = BUFFER_STEPS.reduce((prev, curr) =>
@@ -74,8 +89,8 @@ function App() {
                 if (s) {
                     setState(s)
                 }
-            } catch (err) {
-                toast.error(`Init failed: ${err}`)
+            } catch (err: any) {
+                toast.error(`Init failed: ${formatError(err)}`)
             } finally {
                 setLoading(false)
             }
@@ -90,6 +105,11 @@ function App() {
             const s = event.data as State
             console.log("State changed:", s)
             setState(s)
+
+            // Auto-close config panel when recording starts (e.g. via shortcut)
+            if (s.status === 'recording' && configOpen) {
+                setConfigOpen(false)
+            }
         })
 
         // Poll for buffer usage when recording
@@ -109,7 +129,7 @@ function App() {
             unsub()
             if (interval) clearInterval(interval)
         }
-    }, [state.status])
+    }, [state.status, configOpen])
 
     const handleStart = async () => {
         try {
@@ -117,8 +137,8 @@ function App() {
             await api.start()
             setState(prev => ({ ...prev, status: 'recording' }))
             toast.success("Recording started")
-        } catch (err) {
-            toast.error(`${err}`)
+        } catch (err: any) {
+            toast.error(formatError(err))
         }
     }
 
@@ -127,19 +147,28 @@ function App() {
             await api.stop()
             setState({ status: 'idle', bufferUsage: 0, recordingFor: 0 })
             toast.info("Recording stopped")
-        } catch (err) {
-            toast.error(`${err}`)
+        } catch (err: any) {
+            toast.error(formatError(err))
         }
     }
 
     const handleSave = async () => {
         try {
             const filename = await api.saveClip()
-            toast.success(`Saved clip: ${filename}`, {
-                description: "File saved successfully to global clips folder."
+
+            let title = `Saved clip: ${filename}`
+            let description = "File saved successfully to global clips folder."
+
+            if (!config.convertToMP4) {
+                title = "Clip saved"
+                description = `Raw data saved to: ${filename}`
+            }
+
+            toast.success(title, {
+                description: description
             })
-        } catch (err) {
-            toast.error(`${err}`)
+        } catch (err: any) {
+            toast.error(formatError(err))
         }
     }
 
@@ -151,7 +180,7 @@ function App() {
             }
         } catch (err: any) {
             console.error("Directory selection error:", err)
-            toast.error("Failed to select directory")
+            toast.error(formatError(err))
         }
     }, [])
 
@@ -186,7 +215,7 @@ function App() {
                             "grid transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]",
                             configOpen ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
                         )}>
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest overflow-hidden">Buffer Length</p>
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest overflow-hidden">Replay Buffer</p>
                         </div>
                         <div className="flex items-baseline justify-center gap-2">
                             <span className={cn(
@@ -256,6 +285,8 @@ function App() {
                     setConfig={setConfig}
                     displays={displays}
                     encoders={encoders}
+                    inputDevices={inputDevices}
+                    outputDevices={outputDevices}
                     disabled={isRecording}
                     onSelectDirectory={handleSelectDirectory}
                 />

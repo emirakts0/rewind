@@ -1,4 +1,4 @@
-import { Settings2, ChevronUp, Monitor, Cpu, Timer, Sparkles, Folder, Mic, Info } from 'lucide-react'
+import { Settings2, ChevronUp, Monitor, Cpu, Timer, Sparkles, Folder, Mic, Info, Volume, Volume1, Volume2, VolumeX, SlidersHorizontal } from 'lucide-react'
 import { Switch } from "@/components/ui/switch"
 import {
     Tooltip,
@@ -26,9 +26,11 @@ import {
     TabsList,
     TabsTrigger,
 } from "@/components/ui/tabs"
+import { Slider } from "@/components/ui/slider"
 import { cn } from '@/lib/utils'
 import type { Config, DisplayInfo, EncoderInfo } from '@/lib/wails'
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { useMemo, useState } from 'react'
 
 interface ConfigPanelProps {
     open: boolean
@@ -37,9 +39,14 @@ interface ConfigPanelProps {
     setConfig: React.Dispatch<React.SetStateAction<Config>>
     displays: DisplayInfo[]
     encoders: EncoderInfo[]
+    inputDevices: string[]
+    outputDevices: string[]
     disabled?: boolean
     onSelectDirectory: () => void
 }
+
+// Standard FPS options to include if below display Hz
+const STANDARD_FPS = [60, 30, 24]
 
 export function ConfigPanel({
     open,
@@ -48,9 +55,36 @@ export function ConfigPanel({
     setConfig,
     displays,
     encoders,
+    inputDevices,
+    outputDevices,
     disabled,
     onSelectDirectory
 }: ConfigPanelProps) {
+    // Volume control visibility states
+    const [showMicVolume, setShowMicVolume] = useState(false)
+    const [showSysVolume, setShowSysVolume] = useState(false)
+
+    // Get current display's refresh rate
+    const selectedDisplay = displays.find(d => d.index === config.displayIndex)
+    const maxHz = selectedDisplay?.refreshRate || 60
+
+    // Build FPS options: native Hz + standard options below it
+    const fpsOptions = useMemo(() => {
+        const options = new Set<number>()
+        options.add(maxHz) // Always include native Hz
+        STANDARD_FPS.forEach(fps => {
+            if (fps <= maxHz) options.add(fps)
+        })
+        return Array.from(options).sort((a, b) => b - a) // Descending
+    }, [maxHz])
+
+    // Ensure current FPS is valid for selected display
+    useMemo(() => {
+        if (config.fps > maxHz) {
+            setConfig(prev => ({ ...prev, fps: maxHz }))
+        }
+    }, [maxHz, config.fps, setConfig])
+
     return (
         <Collapsible open={open} onOpenChange={onOpenChange}>
             <Card className={cn("border-border/50 shadow-sm transition-all duration-300", disabled && "opacity-50 pointer-events-none")}>
@@ -191,9 +225,11 @@ export function ConfigPanel({
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="30">30</SelectItem>
-                                                        <SelectItem value="60">60</SelectItem>
-                                                        <SelectItem value="120">120</SelectItem>
+                                                        {fpsOptions.map(fps => (
+                                                            <SelectItem key={fps} value={fps.toString()}>
+                                                                {fps}{fps === maxHz ? ' (Native)' : ''}
+                                                            </SelectItem>
+                                                        ))}
                                                     </SelectContent>
                                                 </Select>
                                             </div>
@@ -222,21 +258,149 @@ export function ConfigPanel({
                             </TabsContent>
 
                             <TabsContent value="audio" className="animate-in slide-in-from-right-2 duration-300 fade-in-0 mt-0">
-                                <div className="h-[280px] flex items-center justify-center relative overflow-hidden">
-                                    <div className="p-6 border border-dashed border-border/50 rounded-lg">
-                                        <div className="flex flex-col items-center justify-center text-center space-y-3">
-                                            <div className="w-10 h-10 rounded-full bg-secondary/20 flex items-center justify-center">
-                                                <Mic className="w-5 h-5 text-muted-foreground" />
+                                <ScrollArea className="h-[280px] -mx-4 w-[calc(100%+2rem)]">
+                                    <div className="space-y-3 px-4 py-2">
+                                        {/* Microphone Selection */}
+                                        <div className="space-y-1.5">
+                                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                                <Mic className="w-3 h-3" /> Microphone
+                                            </label>
+                                            <div className="flex items-center gap-2">
+                                                <Select
+                                                    value={config.microphoneDevice || "none"}
+                                                    onValueChange={(v) => {
+                                                        setConfig(prev => ({ ...prev, microphoneDevice: v === "none" ? "" : v }))
+                                                        if (v === "none") setShowMicVolume(false)
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="h-9 bg-accent border-border/50 flex-1">
+                                                        <SelectValue placeholder="No Microphone" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="none">No Microphone</SelectItem>
+                                                        {inputDevices.map(d => (
+                                                            <SelectItem key={d} value={d}>
+                                                                {d}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+
+                                                {config.microphoneDevice && config.microphoneDevice !== "none" && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className={cn(
+                                                            "h-9 w-9 shrink-0 hover:bg-accent hover:text-foreground transition-all duration-200 border border-transparent",
+                                                            showMicVolume ? "text-primary bg-accent border-border/50 shadow-sm" : "text-muted-foreground/50"
+                                                        )}
+                                                        onClick={() => setShowMicVolume(!showMicVolume)}
+                                                        title="Adjust Volume"
+                                                    >
+                                                        <SlidersHorizontal className="w-4 h-4" />
+                                                    </Button>
+                                                )}
                                             </div>
-                                            <div className="space-y-1">
-                                                <h4 className="text-sm font-medium">Audio Capture</h4>
-                                                <p className="text-xs text-muted-foreground max-w-[200px]">
-                                                    Coming soon in a future update.
-                                                </p>
+
+                                            {/* Mic Volume */}
+                                            {showMicVolume && config.microphoneDevice && config.microphoneDevice !== "none" && (
+                                                <div className="flex items-center gap-3 px-1 pt-2 pb-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                    <button
+                                                        onClick={() => setConfig(prev => ({ ...prev, micVolume: prev.micVolume === 0 ? 100 : 0 }))}
+                                                        className="text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+                                                        title={config.micVolume === 0 ? "Unmute" : "Mute"}
+                                                    >
+                                                        {config.micVolume === 0 ? <VolumeX className="w-4 h-4" /> :
+                                                            config.micVolume < 50 ? <Volume className="w-4 h-4" /> :
+                                                                config.micVolume < 100 ? <Volume1 className="w-4 h-4" /> :
+                                                                    <Volume2 className="w-4 h-4" />}
+                                                    </button>
+                                                    <Slider
+                                                        value={[config.micVolume ?? 100]}
+                                                        min={0}
+                                                        max={200}
+                                                        step={1}
+                                                        onValueChange={([v]) => setConfig(prev => ({ ...prev, micVolume: v }))}
+                                                        className="flex-1 cursor-pointer [&_[role=slider]]:h-3.5 [&_[role=slider]]:w-3.5"
+                                                    />
+                                                    <span className="text-[10px] font-mono w-[3ch] text-right text-muted-foreground select-none">
+                                                        {config.micVolume ?? 100}%
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* System Audio Selection */}
+                                        <div className="space-y-1.5">
+                                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                                <Settings2 className="w-3 h-3" /> System Audio
+                                            </label>
+                                            <div className="flex items-center gap-2">
+                                                <Select
+                                                    value={config.systemAudioDevice || "none"}
+                                                    onValueChange={(v) => {
+                                                        setConfig(prev => ({ ...prev, systemAudioDevice: v === "none" ? "" : v }))
+                                                        if (v === "none") setShowSysVolume(false)
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="h-9 bg-accent border-border/50 flex-1">
+                                                        <SelectValue placeholder="No System Audio" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="none">No System Audio</SelectItem>
+                                                        {outputDevices.map(d => (
+                                                            <SelectItem key={d} value={d}>
+                                                                {d}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+
+                                                {config.systemAudioDevice && config.systemAudioDevice !== "none" && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className={cn(
+                                                            "h-9 w-9 shrink-0 hover:bg-accent hover:text-foreground transition-all duration-200 border border-transparent",
+                                                            showSysVolume ? "text-primary bg-accent border-border/50 shadow-sm" : "text-muted-foreground/50"
+                                                        )}
+                                                        onClick={() => setShowSysVolume(!showSysVolume)}
+                                                        title="Adjust Volume"
+                                                    >
+                                                        <SlidersHorizontal className="w-4 h-4" />
+                                                    </Button>
+                                                )}
                                             </div>
+
+                                            {/* System Volume */}
+                                            {showSysVolume && config.systemAudioDevice && config.systemAudioDevice !== "none" && (
+                                                <div className="flex items-center gap-3 px-1 pt-2 pb-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                    <button
+                                                        onClick={() => setConfig(prev => ({ ...prev, sysVolume: prev.sysVolume === 0 ? 100 : 0 }))}
+                                                        className="text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+                                                        title={config.sysVolume === 0 ? "Unmute" : "Mute"}
+                                                    >
+                                                        {config.sysVolume === 0 ? <VolumeX className="w-4 h-4" /> :
+                                                            config.sysVolume < 50 ? <Volume className="w-4 h-4" /> :
+                                                                config.sysVolume < 100 ? <Volume1 className="w-4 h-4" /> :
+                                                                    <Volume2 className="w-4 h-4" />}
+                                                    </button>
+                                                    <Slider
+                                                        value={[config.sysVolume ?? 100]}
+                                                        min={0}
+                                                        max={200}
+                                                        step={1}
+                                                        onValueChange={([v]) => setConfig(prev => ({ ...prev, sysVolume: v }))}
+                                                        className="flex-1 cursor-pointer [&_[role=slider]]:h-3.5 [&_[role=slider]]:w-3.5"
+                                                    />
+                                                    <span className="text-[10px] font-mono w-[3ch] text-right text-muted-foreground select-none">
+                                                        {config.sysVolume ?? 100}%
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-                                </div>
+                                </ScrollArea>
                             </TabsContent>
                         </Tabs>
                     </CardContent>

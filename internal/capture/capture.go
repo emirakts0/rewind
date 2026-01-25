@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	hiddenexec "rewind/internal/utils"
 	"strings"
-
 	"sync"
 )
 
@@ -63,8 +62,27 @@ func (c *Capturer) Start() error {
 
 	c.running = true
 	go c.readLoop()
+	go c.readStderrLoop()
 
 	return nil
+}
+
+func (c *Capturer) readStderrLoop() {
+	reader := bufio.NewReader(c.stdErr)
+	for {
+		line, err := reader.ReadString('\n')
+		if line != "" {
+			trimmed := strings.TrimSpace(line)
+			if strings.Contains(trimmed, "Error") || strings.Contains(trimmed, "error") {
+				slog.Error("ffmpeg error", "message", trimmed)
+			} else {
+				slog.Debug("ffmpeg", "output", trimmed)
+			}
+		}
+		if err != nil {
+			break
+		}
+	}
 }
 
 func (c *Capturer) readLoop() {
@@ -74,9 +92,6 @@ func (c *Capturer) readLoop() {
 	for {
 		n, err := reader.Read(buf)
 		if n > 0 && c.OnData != nil {
-			// Pass buffer slice directly to avoid allocation loop.
-			// The subscriber (Ring.Write) copies the data, so this is safe
-			// as long as it returns before we overwrite buf.
 			c.OnData(buf[:n])
 		}
 		if err != nil {

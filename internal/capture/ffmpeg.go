@@ -78,14 +78,15 @@ func (b *FFmpegCommandBuilder) getEncoderArgs() []string {
 }
 
 func (b *FFmpegCommandBuilder) getOutputArgs() []string {
-	return []string{
+	args := []string{
 		"-b:v", b.config.Bitrate,
 		"-maxrate", b.config.Bitrate,
 		"-bufsize", b.config.Bitrate,
 		"-g", strconv.Itoa(b.config.FPS),
-		"-f", "mpegts",
-		"-",
 	}
+
+	args = append(args, "-f", "mpegts", "-")
+	return args
 }
 
 func ParseBitrate(br string) int {

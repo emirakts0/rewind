@@ -1,9 +1,9 @@
-// Wails v3 bindings types
 export interface DisplayInfo {
     index: number
     name: string
     width: number
     height: number
+    refreshRate: number
     isPrimary: boolean
 }
 
@@ -21,6 +21,10 @@ export interface Config {
     recordSeconds: number
     outputDir: string
     convertToMP4: boolean
+    microphoneDevice: string
+    micVolume: number
+    systemAudioDevice: string
+    sysVolume: number
 }
 
 export interface Clip {
@@ -28,6 +32,8 @@ export interface Clip {
     path: string
     size: number
     modTime: string
+    isRawFolder: boolean
+    durationSec?: number
 }
 
 export interface State {
@@ -37,11 +43,9 @@ export interface State {
     recordingFor: number
 }
 
-// Import bindings from generated files (Wails v3 style)
 import * as AppBindings from '../../bindings/rewind/internal/app/app'
 import { Events } from "@wailsio/runtime"
 
-// API wrapper
 export const api = {
     async initialize(): Promise<void> {
         return AppBindings.Initialize()
@@ -53,7 +57,6 @@ export const api = {
     },
 
     async getEncoders(): Promise<EncoderInfo[]> {
-        // v3 doesn't have a general GetEncoders, use GetEncodersForDisplay instead
         const encoders = await AppBindings.GetEncodersForDisplay(0)
         return encoders as unknown as EncoderInfo[]
     },
@@ -92,8 +95,8 @@ export const api = {
         return AppBindings.SelectDirectory()
     },
 
-    async estimateMemory(bitrate: string, seconds: number): Promise<string> {
-        return AppBindings.EstimateMemory(bitrate, seconds)
+    async estimateMemory(bitrate: string, seconds: number, hasMic: boolean, hasSys: boolean): Promise<string> {
+        return AppBindings.EstimateMemory(bitrate, seconds, hasMic, hasSys)
     },
 
     async getClips(): Promise<Clip[]> {
@@ -114,7 +117,14 @@ export const api = {
         return encoders as unknown as EncoderInfo[]
     },
 
-    // Event listeners
+    async getInputDevices(): Promise<string[]> {
+        return (AppBindings as any).GetInputDevices()
+    },
+
+    async getOutputDevices(): Promise<string[]> {
+        return (AppBindings as any).GetOutputDevices()
+    },
+
     Events: {
         On: (eventName: string, callback: (data: any) => void) => {
             return Events.On(eventName, callback)

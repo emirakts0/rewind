@@ -8,12 +8,9 @@ import (
 )
 
 type Config struct {
-	// Selected display index
 	DisplayIndex int
+	EncoderName  string
 
-	EncoderName string
-
-	// Capture settings
 	FPS           int
 	Bitrate       string
 	RecordSeconds int
@@ -21,7 +18,9 @@ type Config struct {
 	FFmpegPath    string
 	DrawMouse     bool
 
-	// Resolved references (set by Resolve)
+	MicrophoneDevice  string
+	SystemAudioDevice string
+
 	display *hardware.Display
 	encoder *hardware.Encoder
 	gpu     *hardware.GPU
