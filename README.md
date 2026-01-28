@@ -1,10 +1,6 @@
-<p align="center">
-  <img src="readme/rewind_banner.png" alt="Rewind Banner" width="100%">
-</p>
 
-<p align="center">
-  <img src="readme/icon.png" alt="Rewind Icon" width="200">
-</p>
+
+
 
 <h1 align="center">Rewind</h1>
 
@@ -12,7 +8,35 @@
   A modern, lightweight screen recording application with instant replay capability.
 </p>
 
+<div align="center">
+
+[![Golang](https://img.shields.io/badge/Golang-00ADD8?logo=go&logoColor=white)](https://golang.org)
+[![FFmpeg](https://img.shields.io/badge/FFmpeg-FF0000?logo=ffmpeg&logoColor=white)](https://ffmpeg.org)
+[![Windows](https://custom-icon-badges.demolab.com/badge/Windows-0078D6?logo=windows11&logoColor=white)](#)
+[![Wails](https://img.shields.io/badge/Wails-111827?logo=go&logoColor=white)](https://wails.io)
+
+
+</div>
+
+<div align="center">
+
+[![Release](https://img.shields.io/badge/Release-v1.0.0-green)](https://github.com/your/repo/releases)
+
+</div>
+
+
+<p align="center">
+  <img src="readme/icon.png" alt="Rewind Icon" width="180">
+</p>
+
+
+
+
+
+
 ---
+
+
 
 ## Overview
 
@@ -37,6 +61,40 @@ Rewind continuously captures your screen in the background and lets you save the
 - **Configurable Quality** - Adjustable FPS, bitrate, and buffer duration
 - **Modern Interface** - Clean, frameless UI with smooth animations
 
+<p align="center">
+  <img src="readme/rewind_banner.png" alt="Rewind Banner" width="100%">
+</p>
+
+
+
+
+
+## Installation
+
+### Windows
+
+1. [[[TODO]] **Download** the latest release from the [Releases](https://github.com/) page.     
+2. **Choose** your installation method:
+   - **Setup Installer** (`RewindSetup.exe`) - Installs to Program Files with shortcuts
+   - **Portable Version** (`Rewind-Portable.zip`) - Extract and run from anywhere
+3. **Run** the application and it will start minimized to the system tray
+
+## Getting Started
+
+1. **Launch** Rewind - it will appear in your system tray
+2. **Start Recording** with <kbd>Ctrl</kbd> + <kbd>F9</kbd> to begin buffering
+3. **Capture Moments** with <kbd>Ctrl</kbd> + <kbd>F10</kbd> to save the last N seconds
+4. **Find Your Clips** in the clips folder (default: `%APPDATA%\Rewind\clips`)
+
+### Configuration
+
+- **Buffer Duration**: Set how many seconds to keep in memory (default: 30s)
+- **Video Quality**: Adjust FPS (30/60/..) and bitrate.
+- **Audio Sources**: Enable/disable system audio and microphone
+- **Output Location**: Choose where clips are saved
+- **Hardware Encoder**: Select your preferred GPU encoder or use cpu encoding
+
+
 ## Screenshots
 
 <div style="display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;">
@@ -48,18 +106,20 @@ Rewind continuously captures your screen in the background and lets you save the
 </div>
 
 
-## Keyboard Shortcuts
 
-<div align="center">
+## Architecture
 
-| Shortcut | Description |
-| :---: | :--- |
-| <kbd>Ctrl</kbd> + <kbd>F9</kbd> | **Toggle Recording**<br>Start or stop the background recording buffer |
-| <kbd>Ctrl</kbd> + <kbd>F10</kbd> | **Instant Replay**<br>Save the last moments as a clip |
+Rewind uses a circular buffer approach to maintain recent screen captures in memory:
 
-</div>
+- **Capture Thread**: Continuously captures screen frames using GPU-accelerated encoding
+- **Audio Thread**: Records system and microphone audio via WASAPI
+- **Buffer Manager**: Maintains a rolling window of video segments
+- **Save Thread**: Assembles and exports clips when triggered
 
+## License
+**********
 ---
+
 
 <p align="center">
   <a href="mailto:emirakts0@gmail.com">emirakts0@gmail.com</a>
