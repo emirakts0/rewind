@@ -30,7 +30,6 @@ fabric.properties
 .todo.txt
 /frontend/node_modules
 /frontend/dist
-/build
 /clips
 
 # Logs and profiling
@@ -43,3 +42,6 @@ cpu_profile
 /frontend/wailsjs
 
 *.exe
+
+.run/
+.task/

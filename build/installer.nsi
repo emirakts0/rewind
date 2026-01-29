@@ -5,7 +5,7 @@
 
 ; General
 Name "Rewind"
-OutFile "build\RewindSetup.exe"
+OutFile "RewindSetup.exe"
 InstallDir "$PROGRAMFILES64\Rewind"
 InstallDirRegKey HKCU "Software\Rewind" ""
 RequestExecutionLevel admin
@@ -23,11 +23,11 @@ Section "Rewind" SecRewind
     SetOutPath "$INSTDIR"
     
     ; Main executable
-    File "build\rewind.exe"
+    File "rewind.exe"
     
     ; FFmpeg Sidecar
     SetOutPath "$INSTDIR\bin"
-    File "build\bin\ffmpeg.exe"
+    File "bin\ffmpeg.exe"
     
     ; Restore path to root for uninstaller
     SetOutPath "$INSTDIR"

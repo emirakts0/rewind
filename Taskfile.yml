@@ -1,0 +1,111 @@
+version: '3'
+
+vars:
+  APP_NAME: rewind
+  BIN_DIR: bin
+  VITE_PORT: 5173
+
+tasks:
+  dev:
+    desc: Run the application in development mode
+    cmds:
+      - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
+
+  dev:frontend:
+    desc: Run frontend dev server (standalone)
+    dir: frontend
+    env:
+      VITE_PORT: "{{.VITE_PORT}}"
+    cmds:
+      - npm run dev
+
+  dev:backend:
+    desc: Run Go backend only (requires frontend build)
+    deps: [install:frontend, build:frontend]
+    cmds:
+      - go run .
+
+  windows:build:
+    desc: Build the Windows application
+    deps: [build:frontend]
+    cmds:
+      - go build -ldflags="-w -s -H windowsgui" -o build/{{.APP_NAME}}.exe .
+
+  install:frontend:
+    desc: Install frontend dependencies
+    dir: frontend
+    sources:
+      - package.json
+      - package-lock.json
+    generates:
+      - node_modules/**/*
+    cmds:
+      - npm install
+
+  build:frontend:
+    desc: Build the frontend
+    deps: [install:frontend]
+    dir: frontend
+    sources:
+      - src/**/*
+      - index.html
+      - vite.config.ts
+      - package.json
+    generates:
+      - dist/**/*
+    cmds:
+      - npm run build
+
+  build:installer:
+    desc: Build NSIS installer (requires NSIS installed)
+    deps: [windows:build]
+    dir: build
+    cmds:
+      - cmd: |
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+            Write-Host "ERROR: NSIS is not installed or not in PATH" -ForegroundColor Red
+            Write-Host "Please install NSIS from https://nsis.sourceforge.io/" -ForegroundColor Yellow
+            exit 1
+          }
+          # Copy ffmpeg.exe to build/bin
+          if (-not (Test-Path "bin")) { New-Item -ItemType Directory -Path "bin" -Force | Out-Null }
+          Copy-Item "..\bin\ffmpeg.exe" "bin\ffmpeg.exe" -Force
+          # Build installer
+          makensis installer.nsi
+        platforms: [windows]
+
+  build:portable:
+    desc: Build portable ZIP archive
+    deps: [windows:build]
+    dir: build
+    cmds:
+      - cmd: |
+          # Copy ffmpeg.exe to build/bin
+          if (-not (Test-Path "bin")) { New-Item -ItemType Directory -Path "bin" -Force | Out-Null }
+          Copy-Item "..\bin\ffmpeg.exe" "bin\ffmpeg.exe" -Force
+          # Create portable ZIP
+          Compress-Archive -Path "rewind.exe", "bin" -DestinationPath "Rewind-Portable.zip" -Force
+        platforms: [windows]
+
+  package:
+    desc: Build executable + installer + portable ZIP
+    deps: [windows:build]
+    cmds:
+      - task: build:installer
+      - task: build:portable
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - cmd: if exist build rmdir /s /q build
+        platforms: [windows]
+        ignore_error: true
+      - cmd: if exist frontend\dist rmdir /s /q frontend\dist
+        platforms: [windows]
+        ignore_error: true
+      - cmd: rm -rf build
+        platforms: [linux, darwin]
+        ignore_error: true
+      - cmd: rm -rf frontend/dist
+        platforms: [linux, darwin]
+        ignore_error: true

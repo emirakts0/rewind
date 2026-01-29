@@ -13,7 +13,7 @@ export default defineConfig({
         outDir: 'dist',
     },
     server: {
-        port: 5173,
+        port: parseInt(process.env.WAILS_VITE_PORT || process.env.VITE_PORT || '5173'),
         strictPort: true,
     },
 })

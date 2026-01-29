@@ -1,0 +1,46 @@
+# Wails 3 Build Configuration
+version: '3'
+
+# Application info
+info:
+  companyName: "Rewind"
+  productName: "Rewind"
+  productIdentifier: "com.rewind.app"
+  description: "Screen recording application"
+  copyright: "(c) 2025, Rewind"
+  comments: "Rewind Screen Recorder"
+  version: "1.0.0"
+
+# Dev mode configuration
+dev_mode:
+  root_path: .
+  log_level: debug
+  debounce: 1000
+  ignore:
+    dir:
+      - .git
+      - node_modules
+      - frontend
+      - bin
+      - build
+    file:
+      - .DS_Store
+      - .gitignore
+      - .gitkeep
+    watched_extension:
+      - "*.go"
+    git_ignore: true
+  frontend:
+    dir: ./frontend
+    install: npm install
+    build: npm run build
+    dev: npm run dev
+  executes:
+    - cmd: go build -o ./build/bin/rewind.exe .
+      type: blocking
+    - cmd: npm run dev
+      dir: ./frontend
+      type: background
+    - cmd: ./build/bin/rewind.exe
+      type: primary
+
