@@ -41,7 +41,7 @@ func ListDevices() ([]Device, error) {
 	for _, info := range captureInfos {
 		idHex := hex.EncodeToString(info.ID[:])
 		name := info.Name()
-		slog.Debug("found capture device", "name", name, "id", idHex)
+		slog.Debug("found capture device", "name", name)
 		devices = append(devices, Device{ID: idHex, Name: name, Type: DeviceTypeInput})
 	}
 
@@ -53,7 +53,7 @@ func ListDevices() ([]Device, error) {
 	for _, info := range playbackInfos {
 		idHex := hex.EncodeToString(info.ID[:])
 		name := info.Name()
-		slog.Debug("found playback device", "name", name, "id", idHex)
+		slog.Debug("found playback device", "name", name)
 		devices = append(devices, Device{ID: idHex, Name: name, Type: DeviceTypeOutput})
 	}
 
