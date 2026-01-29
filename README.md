@@ -38,14 +38,6 @@
 
 Rewind continuously captures your screen in the background and lets you save the last moments on demand. Built with performance in mind for a seamless recording experience.
 
-## Tech Stack
-
-- **Go** - High-performance backend logic and orchestration
-- **Wails v3** - Modern desktop application framework
-- **FFmpeg** - Industry-standard video processing and hardware encoding (NVENC, AMF, QuickSync)
-- **WASAPI** - Low-latency Windows Audio Session API for loopback and microphone capture
-- **React** - Dynamic and responsive frontend user interface
-- **TypeScript** - Type-safe development for robust code
 
 ## Features
 
@@ -57,13 +49,19 @@ Rewind continuously captures your screen in the background and lets you save the
 - **Configurable Quality** - Adjustable FPS, bitrate, and buffer duration
 - **Modern Interface** - Clean, frameless UI with smooth animations
 
+
+## Tech Stack
+
+- **Go** - High-performance backend logic and orchestration
+- **Wails v3** - Modern desktop application framework
+- **FFmpeg** - Industry-standard video processing and hardware encoding (NVENC, AMF, QuickSync)
+- **WASAPI** - Low-latency Windows Audio Session API for loopback and microphone capture
+- **React** - Dynamic and responsive frontend user interface
+- **TypeScript** - Type-safe development for robust code
+
 <p align="center">
   <img src="readme/rewind_banner.png" alt="Rewind Banner" width="100%">
 </p>
-
-
-
-
 
 ## Installation
 
@@ -107,13 +105,12 @@ Rewind continuously captures your screen in the background and lets you save the
 ### Prerequisites
 
 ```bash
-# Install Go (1.21+)
-# Install Node.js (18+)
-# Install Wails CLI
-go install github.com/wailsapp/wails/v3/cmd/wails3@latest
-
-# Optional: Install NSIS for creating Windows installer
-# Download from https://nsis.sourceforge.io/
+    # Install Go (1.21+)
+    # Install Node.js (18+)
+    # Install Wails CLI
+    go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+    # Install NSIS for creating Windows installer
+    # Download from https://nsis.sourceforge.io/
 ```
 
 ### Build Steps
