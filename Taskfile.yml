@@ -29,7 +29,8 @@ tasks:
     desc: Build the Windows application
     deps: [build:frontend]
     cmds:
-      - go build -ldflags="-w -s -H windowsgui" -o build/{{.APP_NAME}}.exe .
+      - powershell -Command "if (!(Test-Path .build)) { mkdir .build | Out-Null }"
+      - go build -ldflags="-w -s -H windowsgui" -o .build/{{.APP_NAME}}.exe .
 
   install:frontend:
     desc: Install frontend dependencies
@@ -59,37 +60,26 @@ tasks:
   build:installer:
     desc: Build NSIS installer (requires NSIS installed)
     deps: [windows:build]
-    dir: build
+    dir: .
+    platforms: [windows]
     cmds:
-      - cmd: |
-          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
-            Write-Host "ERROR: NSIS is not installed or not in PATH" -ForegroundColor Red
-            Write-Host "Please install NSIS from https://nsis.sourceforge.io/" -ForegroundColor Yellow
-            exit 1
-          }
-          # Copy ffmpeg.exe to build/bin
-          if (-not (Test-Path "bin")) { New-Item -ItemType Directory -Path "bin" -Force | Out-Null }
-          Copy-Item "..\bin\ffmpeg.exe" "bin\ffmpeg.exe" -Force
-          # Build installer
-          makensis installer.nsi
-        platforms: [windows]
+      - powershell -Command "if (!(Test-Path .build/bin)) { mkdir .build/bin | Out-Null }"
+      - powershell -Command "Copy-Item bin\ffmpeg.exe .build\bin\ffmpeg.exe -Force"
+      - powershell -Command "Copy-Item build\installer.nsi .build\installer.nsi -Force"
+      - makensis .build/installer.nsi
 
   build:portable:
     desc: Build portable ZIP archive
     deps: [windows:build]
-    dir: build
+    dir: .
+    platforms: [windows]
     cmds:
-      - cmd: |
-          # Copy ffmpeg.exe to build/bin
-          if (-not (Test-Path "bin")) { New-Item -ItemType Directory -Path "bin" -Force | Out-Null }
-          Copy-Item "..\bin\ffmpeg.exe" "bin\ffmpeg.exe" -Force
-          # Create portable ZIP
-          Compress-Archive -Path "rewind.exe", "bin" -DestinationPath "Rewind-Portable.zip" -Force
-        platforms: [windows]
+      - powershell -Command "if (!(Test-Path .build/bin)) { mkdir .build/bin | Out-Null }"
+      - powershell -Command "Copy-Item bin\ffmpeg.exe .build\bin\ffmpeg.exe -Force"
+      - powershell -Command "Compress-Archive -Path .build\rewind.exe,.build\bin -DestinationPath .build\Rewind-Portable.zip -Force"
 
   package:
     desc: Build executable + installer + portable ZIP
-    deps: [windows:build]
     cmds:
       - task: build:installer
       - task: build:portable
@@ -97,15 +87,5 @@ tasks:
   clean:
     desc: Clean build artifacts
     cmds:
-      - cmd: if exist build rmdir /s /q build
-        platforms: [windows]
-        ignore_error: true
-      - cmd: if exist frontend\dist rmdir /s /q frontend\dist
-        platforms: [windows]
-        ignore_error: true
-      - cmd: rm -rf build
-        platforms: [linux, darwin]
-        ignore_error: true
-      - cmd: rm -rf frontend/dist
-        platforms: [linux, darwin]
-        ignore_error: true
+      - powershell -Command "if (Test-Path .build) { Remove-Item -Recurse -Force .build }"
+      - powershell -Command "if (Test-Path frontend/dist) { Remove-Item -Recurse -Force frontend/dist }"

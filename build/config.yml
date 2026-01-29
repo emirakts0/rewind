@@ -36,11 +36,13 @@ dev_mode:
     build: npm run build
     dev: npm run dev
   executes:
-    - cmd: go build -o ./build/bin/rewind.exe .
+    - cmd: powershell -Command "if (!(Test-Path .build)) { mkdir .build | Out-Null }"
+      type: blocking
+    - cmd: go build -o ./.build/rewind.exe .
       type: blocking
     - cmd: npm run dev
       dir: ./frontend
       type: background
-    - cmd: ./build/bin/rewind.exe
+    - cmd: ./.build/rewind.exe
       type: primary
 

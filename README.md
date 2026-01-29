@@ -14,15 +14,11 @@
 [![FFmpeg](https://img.shields.io/badge/FFmpeg-FF0000?logo=ffmpeg&logoColor=white)](https://ffmpeg.org)
 [![Windows](https://custom-icon-badges.demolab.com/badge/Windows-0078D6?logo=windows11&logoColor=white)](#)
 [![Wails](https://img.shields.io/badge/Wails-111827?logo=go&logoColor=white)](https://wails.io)
-
-
-</div>
-
-<div align="center">
-
 [![Release](https://img.shields.io/badge/Release-v1.0.0-green)](https://github.com/your/repo/releases)
 
+
 </div>
+
 
 
 <p align="center">
@@ -106,6 +102,33 @@ Rewind continuously captures your screen in the background and lets you save the
 </div>
 
 
+## Building from Source
+
+### Prerequisites
+
+```bash
+# Install Go (1.21+)
+# Install Node.js (18+)
+# Install Wails CLI
+go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+
+# Optional: Install NSIS for creating Windows installer
+# Download from https://nsis.sourceforge.io/
+```
+
+### Build Steps
+
+```bash
+  # Build everything (executable + installer + portable ZIP)
+  wails3 task package
+```
+
+### Development Mode (with Hot Reload)
+
+
+```bash
+  wails3 dev
+```
 
 ## Architecture
 

@@ -45,3 +45,4 @@ cpu_profile
 
 .run/
 .task/
+.build/
