@@ -9,6 +9,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"path/filepath"
+	"rewind/internal/utils"
 
 	"rewind/internal/app"
 	"rewind/internal/input"
@@ -224,8 +225,16 @@ func (t *TrayManager) UpdateShowHideLabel() {
 }
 
 func main() {
+	// Ensure only one instance is running
+	mutex, err := utils.AcquireSingleInstance("Global\\RewindApp")
+	if err != nil {
+		log.Fatalf("Cannot start: %v", err)
+		return
+	}
+	defer mutex.Release()
+
 	logPath := logging.GetDefaultLogPath()
-	if err := logging.Setup(logPath, true); err != nil {
+	if err = logging.Setup(logPath, true); err != nil {
 		log.Printf("Failed to setup logging: %v", err)
 	}
 	defer logging.Close()
@@ -316,7 +325,7 @@ func main() {
 		trayManager.UpdateState()
 	})
 
-	err := appInstance.Run()
+	err = appInstance.Run()
 	if err != nil {
 		log.Fatal(err)
 	}

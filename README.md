@@ -22,7 +22,7 @@
 
 
 <p align="center">
-  <img src="build/assets/icon.png" alt="Rewind Icon" width="180">
+  <img src="build/assets/icon.ico" alt="Rewind Icon" width="180">
 </p>
 
 

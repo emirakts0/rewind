@@ -16,6 +16,7 @@ import (
 	"rewind/internal/buffer"
 	"rewind/internal/capture"
 	"rewind/internal/hardware"
+	"rewind/internal/utils"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -47,13 +48,20 @@ type Config struct {
 
 // DefaultConfig returns sensible defaults
 func DefaultConfig() Config {
+	// Get default clips directory from user's AppData
+	outputDir, err := utils.GetClipsDir()
+	if err != nil {
+		// Fallback to current directory if AppData is not available
+		outputDir = "./clips"
+	}
+
 	return Config{
 		DisplayIndex:      0,
 		EncoderName:       "", // auto-select
 		FPS:               60,
 		Bitrate:           "15M",
 		RecordSeconds:     30,
-		OutputDir:         "./clips",
+		OutputDir:         outputDir,
 		ConvertToMP4:      true,
 		MicrophoneDevice:  "",
 		MicVolume:         100,
@@ -340,6 +348,17 @@ func (a *App) Start() error {
 		return fmt.Errorf("not initialized")
 	}
 
+	// Ensure OutputDir is absolute and create it
+	absDir, err := utils.ResolveAbsPath(a.config.OutputDir, "")
+	if err != nil {
+		return fmt.Errorf("failed to resolve output directory: %w", err)
+	}
+	a.config.OutputDir = absDir
+
+	if err := os.MkdirAll(a.config.OutputDir, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create output directory: %w", err)
+	}
+
 	// Build capture config
 	captureCfg := capture.DefaultConfig()
 	captureCfg.DisplayIndex = a.config.DisplayIndex
@@ -382,11 +401,10 @@ func (a *App) Start() error {
 	a.startTime = time.Now()
 	a.setState(StatusRecording, "")
 
-	os.MkdirAll(a.config.OutputDir, os.ModePerm)
-
 	slog.Info("recording started",
 		"display", a.config.DisplayIndex,
 		"encoder", a.config.EncoderName,
+		"outputDir", a.config.OutputDir,
 	)
 
 	if a.config.MicrophoneDevice != "" || a.config.SystemAudioDevice != "" {
@@ -554,7 +572,13 @@ type Clip struct {
 
 // GetClips returns a list of saved clips in the output directory.
 func (a *App) GetClips() ([]Clip, error) {
-	files, err := os.ReadDir(a.config.OutputDir)
+	// Ensure OutputDir is absolute
+	outputDir, err := utils.ResolveAbsPath(a.config.OutputDir, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve output directory: %w", err)
+	}
+
+	files, err := os.ReadDir(outputDir)
 	if err != nil {
 		// If dir doesn't exist, return empty
 		if os.IsNotExist(err) {
@@ -565,7 +589,7 @@ func (a *App) GetClips() ([]Clip, error) {
 
 	var clips []Clip
 	for _, f := range files {
-		absPath, _ := filepath.Abs(filepath.Join(a.config.OutputDir, f.Name()))
+		absPath := filepath.Join(outputDir, f.Name())
 
 		if f.IsDir() {
 			metadata, err := capture.ReadMetadata(absPath)
@@ -626,7 +650,14 @@ func (a *App) GetClips() ([]Clip, error) {
 // OpenClip opens a clip in the default system player
 func (a *App) OpenClip(path string) error {
 	slog.Info("opening clip", "path", path)
-	cmd := exec.Command("explorer", path)
+
+	// Resolve path and validate it exists
+	absPath, err := utils.ResolveAndValidatePath(path, a.config.OutputDir)
+	if err != nil {
+		return fmt.Errorf("clip not found: %w", err)
+	}
+
+	cmd := exec.Command("explorer", absPath)
 	return cmd.Start()
 }
 

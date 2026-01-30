@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"rewind/internal/utils"
 
 	"gopkg.in/natefinch/lumberjack.v2"
 )
@@ -70,13 +71,12 @@ func Close() {
 	}
 }
 
-// GetDefaultLogPath returns the log file path relative to executable
+// GetDefaultLogPath returns the log file path in user's AppData directory
 func GetDefaultLogPath() string {
-	exePath, err := os.Executable()
+	logsDir, err := utils.GetLogsDir()
 	if err != nil {
-		// Fallback to current directory
+		// Fallback to current directory if AppData is not available
 		return filepath.Join(".", "logs", "rewind.log")
 	}
-	exeDir := filepath.Dir(exePath)
-	return filepath.Join(exeDir, "logs", "rewind.log")
+	return filepath.Join(logsDir, "rewind.log")
 }

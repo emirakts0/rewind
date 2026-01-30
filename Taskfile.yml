@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  APP_NAME: rewind
+  APP_NAME: Rewind
   BIN_DIR: bin
   VITE_PORT: 5173
 
@@ -31,6 +31,7 @@ tasks:
     deps: [build:frontend]
     cmds:
       - powershell -Command "if (!(Test-Path .build)) { mkdir .build | Out-Null }"
+      - wails3 generate syso -icon build/assets/icon.ico -manifest build/wails.exe.manifest -arch amd64
       - go build -ldflags="-w -s -H windowsgui" -o .build/{{.APP_NAME}}.exe .
 
   install:frontend:
@@ -67,6 +68,7 @@ tasks:
       - powershell -Command "if (!(Test-Path .build/bin)) { mkdir .build/bin | Out-Null }"
       - powershell -Command "Copy-Item bin\ffmpeg.exe .build\bin\ffmpeg.exe -Force"
       - powershell -Command "Copy-Item build\installer.nsi .build\installer.nsi -Force"
+      - powershell -Command "if (Test-Path build\assets\icon.ico) { Copy-Item build\assets\icon.ico .build\icon.ico -Force }"
       - makensis .build/installer.nsi
 
   build:portable:
@@ -90,3 +92,4 @@ tasks:
     cmds:
       - powershell -Command "if (Test-Path .build) { Remove-Item -Recurse -Force .build }"
       - powershell -Command "if (Test-Path frontend/dist) { Remove-Item -Recurse -Force frontend/dist }"
+      - powershell -Command "if (Test-Path rsrc_windows_amd64.syso) { Remove-Item -Force rsrc_windows_amd64.syso }"

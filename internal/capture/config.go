@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"rewind/internal/hardware"
+	"rewind/internal/utils"
 )
 
 type Config struct {
@@ -27,13 +28,20 @@ type Config struct {
 }
 
 func DefaultConfig() *Config {
+	// Get default clips directory from user's AppData
+	outputDir, err := utils.GetClipsDir()
+	if err != nil {
+		// Fallback to current directory if AppData is not available
+		outputDir = "./clips"
+	}
+
 	return &Config{
 		DisplayIndex:  0,
 		EncoderName:   "", // empty = auto (CPU fallback)
 		FPS:           60,
 		Bitrate:       "15M",
 		RecordSeconds: 30,
-		OutputDir:     "./clips",
+		OutputDir:     outputDir,
 		FFmpegPath:    "bin/ffmpeg.exe",
 		DrawMouse:     true,
 	}
