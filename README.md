@@ -22,15 +22,12 @@
 
 
 <p align="center">
-  <img src="readme/icon.png" alt="Rewind Icon" width="180">
+  <img src="build/assets/icon.png" alt="Rewind Icon" width="180">
 </p>
 
 
 
 
-
-
----
 
 
 
