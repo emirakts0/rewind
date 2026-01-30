@@ -8,6 +8,7 @@ vars:
 tasks:
   dev:
     desc: Run the application in development mode
+    deps: [build:frontend]
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 

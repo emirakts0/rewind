@@ -111,6 +111,7 @@ Rewind continuously captures your screen in the background and lets you save the
     go install github.com/wailsapp/wails/v3/cmd/wails3@latest
     # Install NSIS for creating Windows installer
     # Download from https://nsis.sourceforge.io/
+    # Download FFmpeg from the Releases page and place it in the bin/ folder.
 ```
 
 ### Build Steps
@@ -124,7 +125,7 @@ Rewind continuously captures your screen in the background and lets you save the
 
 
 ```bash
-  wails3 dev
+  wails3 task dev
 ```
 
 ## Architecture
