@@ -16,15 +16,16 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
+	"golang.org/x/sys/windows/registry"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
 
-//go:embed frontend/public/icon.png
+//go:embed build/assets/icon.png
 var appIcon []byte
 
-//go:embed frontend/public/icon-recording.png
+//go:embed build/assets/icon-recording.png
 var appIconRecording []byte
 
 func getFFmpegPath() string {
@@ -52,6 +53,33 @@ func getFFmpegPath() string {
 
 	// Last resort: hope it's in PATH
 	return "ffmpeg"
+}
+
+func ensureStartup() {
+	exePath, err := os.Executable()
+	if err != nil {
+		slog.Error("Failed to get executable path for startup registration", "error", err)
+		return
+	}
+
+	// Only register if running as the production binary name to avoid registering temp dev builds
+	if filepath.Base(exePath) != "rewind.exe" {
+		slog.Debug("Skipping startup registration for non-production binary", "name", filepath.Base(exePath))
+		return
+	}
+
+	key, err := registry.OpenKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Run`, registry.ALL_ACCESS)
+	if err != nil {
+		slog.Error("Failed to open startup registry key", "error", err)
+		return
+	}
+	defer key.Close()
+
+	if err := key.SetStringValue("Rewind", exePath); err != nil {
+		slog.Error("Failed to set startup registry value", "error", err)
+	} else {
+		slog.Info("Ensured application is in startup registry", "path", exePath)
+	}
 }
 
 // TrayManager handles system tray functionality
@@ -204,6 +232,8 @@ func main() {
 
 	ffmpegPath := getFFmpegPath()
 	slog.Info("Using FFmpeg", "path", ffmpegPath)
+
+	ensureStartup()
 
 	// Start pprof server
 	go func() {
