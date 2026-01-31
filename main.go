@@ -9,7 +9,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"path/filepath"
-	"rewind/internal/utils"
 
 	"rewind/internal/app"
 	"rewind/internal/input"
@@ -17,7 +16,6 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
-	"golang.org/x/sys/windows/registry"
 )
 
 //go:embed all:frontend/dist
@@ -54,33 +52,6 @@ func getFFmpegPath() string {
 
 	// Last resort: hope it's in PATH
 	return "ffmpeg"
-}
-
-func ensureStartup() {
-	exePath, err := os.Executable()
-	if err != nil {
-		slog.Error("Failed to get executable path for startup registration", "error", err)
-		return
-	}
-
-	// Only register if running as the production binary name to avoid registering temp dev builds
-	if filepath.Base(exePath) != "rewind.exe" {
-		slog.Debug("Skipping startup registration for non-production binary", "name", filepath.Base(exePath))
-		return
-	}
-
-	key, err := registry.OpenKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Run`, registry.ALL_ACCESS)
-	if err != nil {
-		slog.Error("Failed to open startup registry key", "error", err)
-		return
-	}
-	defer key.Close()
-
-	if err := key.SetStringValue("Rewind", exePath); err != nil {
-		slog.Error("Failed to set startup registry value", "error", err)
-	} else {
-		slog.Info("Ensured application is in startup registry", "path", exePath)
-	}
 }
 
 // TrayManager handles system tray functionality
@@ -225,24 +196,14 @@ func (t *TrayManager) UpdateShowHideLabel() {
 }
 
 func main() {
-	// Ensure only one instance is running
-	mutex, err := utils.AcquireSingleInstance("Global\\RewindApp")
-	if err != nil {
-		log.Fatalf("Cannot start: %v", err)
-		return
-	}
-	defer mutex.Release()
-
 	logPath := logging.GetDefaultLogPath()
-	if err = logging.Setup(logPath, true); err != nil {
+	if err := logging.Setup(logPath, true); err != nil {
 		log.Printf("Failed to setup logging: %v", err)
 	}
 	defer logging.Close()
 
 	ffmpegPath := getFFmpegPath()
 	slog.Info("Using FFmpeg", "path", ffmpegPath)
-
-	ensureStartup()
 
 	// Start pprof server
 	go func() {
@@ -254,6 +215,8 @@ func main() {
 
 	rewindApp := app.New(ffmpegPath)
 
+	var mainWindow *application.WebviewWindow
+
 	appInstance := application.New(application.Options{
 		Name:        "Rewind",
 		Description: "Screen recording application with instant replay",
@@ -263,6 +226,16 @@ func main() {
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
+		},
+		SingleInstance: &application.SingleInstanceOptions{
+			UniqueID: "com.emirakts.rewind.single.instance",
+			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
+				slog.Info("Second instance launched, bringing window to front", "args", data.Args)
+				if mainWindow != nil {
+					mainWindow.Show()
+					mainWindow.Focus()
+				}
+			},
 		},
 	})
 
@@ -282,6 +255,7 @@ func main() {
 		BackgroundColour: application.NewRGBA(15, 15, 20, 255),
 		URL:              "/",
 	})
+	mainWindow = window
 
 	// Hide to tray instead of closing
 	window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
@@ -325,7 +299,7 @@ func main() {
 		trayManager.UpdateState()
 	})
 
-	err = appInstance.Run()
+	err := appInstance.Run()
 	if err != nil {
 		log.Fatal(err)
 	}

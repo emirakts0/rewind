@@ -8,13 +8,9 @@ import (
 const AppName = "Rewind"
 
 func GetAppDataDir() (string, error) {
-	localAppData := os.Getenv("LOCALAPPDATA")
-	if localAppData == "" {
-		cacheDir, err := os.UserCacheDir()
-		if err != nil {
-			return "", err
-		}
-		localAppData = cacheDir
+	localAppData, err := os.UserCacheDir()
+	if err != nil {
+		return "", err
 	}
 
 	appDataDir := filepath.Join(localAppData, AppName)
