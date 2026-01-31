@@ -5,7 +5,6 @@ package hardware
 import (
 	"fmt"
 	"log/slog"
-	"rewind/internal/utils"
 	"strings"
 )
 
@@ -39,38 +38,25 @@ func (l GPUList) FindByIndex(index int) *GPU {
 	return nil
 }
 func DetectGPUs() (GPUList, error) {
-	gpus, err := detectGPUsFromWMIC()
+	gpus, err := detectGPUsFromDXGI()
 	if err != nil || len(gpus) == 0 {
-		return nil, fmt.Errorf("WMI GPU detection failed: %w", err)
+		return nil, fmt.Errorf("GPU detection failed: %w", err)
 	}
 	return gpus, nil
 }
 
-// detectGPUsFromWMIC uses Windows WMI to get GPU information.
-func detectGPUsFromWMIC() (GPUList, error) {
-	cmd := utils.Command("wmic", "path", "win32_videocontroller", "get", "name,adapterram,pnpdeviceid", "/format:csv")
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, err
+// detectGPUsFromDXGI uses DXGI (DirectX Graphics Infrastructure) to detect GPUs.
+func detectGPUsFromDXGI() (GPUList, error) {
+	gpuNames := EnumerateGPUsDXGI()
+	if len(gpuNames) == 0 {
+		return nil, fmt.Errorf("no GPUs found via DXGI")
 	}
 
 	var gpus GPUList
-	lines := strings.Split(string(out), "\n")
-
 	idx := 0
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "Node,") {
-			continue
-		}
-
-		parts := strings.Split(line, ",")
-		if len(parts) < 4 {
-			continue
-		}
-		name := strings.TrimSpace(parts[2])
-
-		if name == "" || name == "Name" {
+	for _, name := range gpuNames {
+		name = strings.TrimSpace(name)
+		if name == "" {
 			continue
 		}
 

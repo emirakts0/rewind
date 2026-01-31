@@ -142,10 +142,10 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	slog.Info("Rewind service starting up...")
 
 	// Initialize the app
-	// if err := a.Initialize(); err != nil {
-	// 	slog.Error("Failed to initialize", "error", err)
-	// 	return err
-	// }
+	if err := a.Initialize(); err != nil {
+		slog.Error("Failed to initialize", "error", err)
+		return err
+	}
 
 	return nil
 }
