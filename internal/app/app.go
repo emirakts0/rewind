@@ -112,11 +112,18 @@ type App struct {
 
 // New creates a new App instance
 func New(ffmpegPath string) *App {
-	return &App{
+	app := &App{
 		config:     DefaultConfig(),
 		ffmpegPath: ffmpegPath,
 		state:      State{Status: StatusIdle},
 	}
+
+	// Load saved config (if exists)
+	if err := app.LoadConfig(); err != nil {
+		slog.Warn("failed to load config", "error", err)
+	}
+
+	return app
 }
 
 // SetApp stores the Wails application instance for event emission
@@ -315,6 +322,12 @@ func (a *App) SetConfig(cfg Config) error {
 
 	a.config = cfg
 	slog.Info("config updated", "config", cfg)
+
+	// Save config to file (use helper to avoid mutex deadlock)
+	if err := saveConfigToFile(cfg); err != nil {
+		slog.Warn("failed to save config", "error", err)
+	}
+
 	return nil
 }
 

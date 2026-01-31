@@ -81,12 +81,22 @@ Section "Desktop Shortcut" SecShortcut
 SectionEnd
 
 Section "Uninstall"
+    ; Remove program files
     Delete "$INSTDIR\Rewind.exe"
     Delete "$INSTDIR\uninstall.exe"
     Delete "$INSTDIR\bin\ffmpeg.exe"
     RMDir "$INSTDIR\bin"
     RMDir "$INSTDIR"
     Delete "$DESKTOP\Rewind.lnk"
+    
+    ; Clean up AppData (keep clips, remove logs and config)
+    RMDir /r "$LOCALAPPDATA\Rewind\logs"
+    RMDir /r "$LOCALAPPDATA\Rewind\config"
+    
+    ; Remove from startup
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Rewind"
+    
+    ; Remove registry keys
     DeleteRegKey HKCU "Software\Rewind"
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Rewind"
 SectionEnd
