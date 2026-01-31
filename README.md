@@ -64,7 +64,7 @@ Rewind continuously captures your screen in the background and lets you save the
 
 ### Windows
 
-1. [[[TODO]] **Download** the latest release from the [Releases](https://github.com/) page.     
+1. [[[TODO]] **Download** the latest release from the [Releases](https://github.com/emirakts0/rewind/releases) page.     
 2. **Choose** your installation method:
    - **Setup Installer** (`RewindSetup.exe`) - Installs to Program Files with shortcuts
    - **Portable Version** (`Rewind-Portable.zip`) - Extract and run from anywhere
