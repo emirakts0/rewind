@@ -186,18 +186,10 @@ export function ConfigPanel({
                                                             <TooltipTrigger asChild>
                                                                 <Info className="w-3 h-3 text-muted-foreground/50 hover:text-foreground cursor-help transition-colors" />
                                                             </TooltipTrigger>
-                                                            <TooltipContent className="max-w-[280px] p-3 text-xs bg-popover/95 backdrop-blur-sm border-border/50">
-                                                                <div className="space-y-2">
-                                                                    <p className="font-semibold text-foreground">Why disable this?</p>
-                                                                    <ul className="list-disc pl-3 space-y-1 text-muted-foreground">
-                                                                        <li><strong>Instant saving:</strong> 0 processing time</li>
-                                                                        <li><strong>Performance:</strong> Reduces CPU/GPU usage greatly</li>
-                                                                        <li><strong>Best for:</strong> Gamers or low-end PCs</li>
-                                                                    </ul>
-                                                                    <p className="border-t border-border/50 mt-2 pt-2 opacity-80">
-                                                                        Clips will be saved as <strong>.ts</strong> files. These can be played in VLC or standard players.
-                                                                    </p>
-                                                                </div>
+                                                            <TooltipContent className="max-w-[220px] p-2.5 text-xs bg-popover/95 backdrop-blur-sm border-border/50">
+                                                                <p className="text-muted-foreground">
+                                                                    When disabled, clips are saved as <strong className="text-foreground">.ts</strong> files for faster saving. You can convert them later from the <button onClick={() => window.dispatchEvent(new CustomEvent('open-clips-drawer'))} className="text-primary hover:underline cursor-pointer">clips folder</button>.
+                                                                </p>
                                                             </TooltipContent>
                                                         </Tooltip>
                                                     </TooltipProvider>

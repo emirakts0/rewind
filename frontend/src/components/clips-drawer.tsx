@@ -52,6 +52,13 @@ export function ClipsDrawer() {
         }
     }, [open])
 
+    // Listen for global event to open drawer
+    useEffect(() => {
+        const handleOpenDrawer = () => setOpen(true)
+        window.addEventListener('open-clips-drawer', handleOpenDrawer)
+        return () => window.removeEventListener('open-clips-drawer', handleOpenDrawer)
+    }, [])
+
     const handleOpenClip = async (path: string) => {
         try {
             await api.openClip(path)
