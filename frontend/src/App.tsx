@@ -23,7 +23,7 @@ function App() {
     const [config, setConfig] = useState<Config>({
         displayIndex: 0,
         encoderName: '',
-        fps: 60,
+        fps: 30,
         bitrate: '15M',
         recordSeconds: 30,
         outputDir: './clips',

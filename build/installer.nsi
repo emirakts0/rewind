@@ -81,7 +81,7 @@ Section "Rewind" SecRewind
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Rewind" "InstallLocation" "$INSTDIR"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Rewind" "DisplayIcon" "$INSTDIR\Rewind.exe,0"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Rewind" "Publisher" "Emir Aktas"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Rewind" "DisplayVersion" "1.0.0"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Rewind" "DisplayVersion" "1.0.1"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Rewind" "URLInfoAbout" "https://github.com/emirakts/rewind"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Rewind" "URLUpdateInfo" "https://github.com/emirakts/rewind/releases"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Rewind" "HelpLink" "https://github.com/emirakts/rewind"

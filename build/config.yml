@@ -9,7 +9,7 @@ info:
   description: "Screen recording application"
   copyright: "(c) 2025, Rewind"
   comments: "Rewind Screen Recorder"
-  version: "1.0.0"
+  version: "1.0.1"
 
 # Dev mode configuration
 dev_mode:

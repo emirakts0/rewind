@@ -5,7 +5,7 @@
 <h1 align="center">Rewind</h1>
 
 <p align="center">
-  A modern, lightweight screen recording application with instant replay capability.
+  An elegant screen recording application with instant replay capability, written in Go and powered by FFmpeg.
 </p>
 
 <div align="center">
@@ -14,7 +14,7 @@
 [![FFmpeg](https://img.shields.io/badge/FFmpeg-FF0000?logo=ffmpeg&logoColor=white)](https://ffmpeg.org)
 [![Windows](https://custom-icon-badges.demolab.com/badge/Windows-0078D6?logo=windows11&logoColor=white)](#)
 [![Wails](https://img.shields.io/badge/Wails-111827?logo=go&logoColor=white)](https://wails.io)
-[![Release](https://img.shields.io/badge/Release-v1.0.0-green)](https://github.com/your/repo/releases)
+[![Release](https://img.shields.io/badge/Release-v1.0.1-green)](https://github.com/your/repo/releases)
 
 
 </div>

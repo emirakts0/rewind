@@ -58,7 +58,7 @@ func DefaultConfig() Config {
 	return Config{
 		DisplayIndex:      0,
 		EncoderName:       "", // auto-select
-		FPS:               60,
+		FPS:               30,
 		Bitrate:           "15M",
 		RecordSeconds:     30,
 		OutputDir:         outputDir,
