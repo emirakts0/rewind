@@ -1,9 +1,8 @@
 module rewind
 
-go 1.25
+go 1.26
 
 require (
-	github.com/gen2brain/malgo v0.11.24
 	github.com/wailsapp/wails/v3 v3.0.0-alpha.59
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )

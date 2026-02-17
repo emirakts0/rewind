@@ -5,15 +5,18 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-
-	"rewind/internal/utils"
 )
 
 const configFileName = "settings.json"
 
 func getConfigFilePath() (string, error) {
-	configDir, err := utils.GetConfigDir()
+	// %LOCALAPPDATA%\Rewind\config\settings.json
+	cacheDir, err := os.UserCacheDir()
 	if err != nil {
+		return "", err
+	}
+	configDir := filepath.Join(cacheDir, "Rewind", "config")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return "", err
 	}
 	return filepath.Join(configDir, configFileName), nil
@@ -41,12 +44,7 @@ func (a *App) LoadConfig() error {
 		return nil
 	}
 
-	//a.config = cfg   // todo:
-	if a.config.OutputDir != cfg.OutputDir {
-		slog.Info("output directory changed", "old", a.config.OutputDir, "new", cfg.OutputDir)
-		a.config.OutputDir = cfg.OutputDir
-	}
-
+	a.config = cfg
 	slog.Info("config loaded", "path", configPath)
 	return nil
 }

@@ -7,24 +7,16 @@ export interface DisplayInfo {
     isPrimary: boolean
 }
 
-export interface EncoderInfo {
-    name: string
-    codec: string
-    gpuName: string
-}
-
 export interface Config {
     displayIndex: number
-    encoderName: string
     fps: number
-    bitrate: string
+    bitrate: number // Mbps
     recordSeconds: number
     outputDir: string
-    convertToMP4: boolean
-    microphoneDevice: string
-    micVolume: number
-    systemAudioDevice: string
-    sysVolume: number
+    microphoneDevice: number // device index, -1 = disabled
+    systemAudioDevice: number // device index, -1 = disabled
+    showCursor: boolean
+    showBorder: boolean
 }
 
 export interface Clip {
@@ -32,33 +24,29 @@ export interface Clip {
     path: string
     size: number
     modTime: string
-    isRawFolder: boolean
-    durationSec?: number
 }
 
 export interface State {
-    status: 'idle' | 'recording' | 'saving' | 'error'
+    status: 'idle' | 'recording' | 'saving'
     errorMessage?: string
     bufferUsage: number
     recordingFor: number
+    diskUsageMB: number
+    memoryUsageMB: number
+    estimate: {
+        diskMB: number
+        memoryMB: number
+        totalMB: number
+    }
 }
 
 import * as AppBindings from '../../bindings/rewind/internal/app/app'
 import { Events } from "@wailsio/runtime"
 
 export const api = {
-    async initialize(): Promise<void> {
-        return AppBindings.Initialize()
-    },
-
     async getDisplays(): Promise<DisplayInfo[]> {
-        const displays = await AppBindings.GetDisplays()
+        const displays = await AppBindings.ListAvailableDisplays()
         return displays as unknown as DisplayInfo[]
-    },
-
-    async getEncoders(): Promise<EncoderInfo[]> {
-        const encoders = await AppBindings.GetEncodersForDisplay(0)
-        return encoders as unknown as EncoderInfo[]
     },
 
     async getConfig(): Promise<Config> {
@@ -67,62 +55,45 @@ export const api = {
     },
 
     async setConfig(config: Config): Promise<void> {
-        return AppBindings.SetConfig(config as any)
+        return AppBindings.UpdateConfig(config as any)
     },
 
     async getState(): Promise<State> {
-        const state = await AppBindings.GetState()
+        const state = await AppBindings.GetRecordingState()
         return state as unknown as State
     },
 
     async start(): Promise<void> {
-        return AppBindings.Start()
+        return AppBindings.StartRecording()
     },
 
     async stop(): Promise<void> {
-        return AppBindings.Stop()
+        return AppBindings.StopRecording()
     },
 
     async saveClip(): Promise<string> {
-        return AppBindings.SaveClip()
-    },
-
-    async isRecording(): Promise<boolean> {
-        return AppBindings.IsRecording()
+        return AppBindings.SaveCurrentClip()
     },
 
     async SelectDirectory(): Promise<string> {
-        return AppBindings.SelectDirectory()
-    },
-
-    async estimateMemory(bitrate: string, seconds: number, hasMic: boolean, hasSys: boolean): Promise<string> {
-        return AppBindings.EstimateMemory(bitrate, seconds, hasMic, hasSys)
+        return AppBindings.ChooseOutputDirectory()
     },
 
     async getClips(): Promise<Clip[]> {
-        const clips = await AppBindings.GetClips()
+        const clips = await AppBindings.ListSavedClips()
         return clips as unknown as Clip[]
     },
 
     async openClip(path: string): Promise<void> {
-        return AppBindings.OpenClip(path)
-    },
-
-    async convertToMP4(path: string): Promise<void> {
-        return AppBindings.ConvertToMP4(path)
-    },
-
-    async getEncodersForDisplay(displayIndex: number): Promise<EncoderInfo[]> {
-        const encoders = await AppBindings.GetEncodersForDisplay(displayIndex)
-        return encoders as unknown as EncoderInfo[]
+        return AppBindings.OpenClipInExplorer(path)
     },
 
     async getInputDevices(): Promise<string[]> {
-        return (AppBindings as any).GetInputDevices()
+        return AppBindings.ListAudioInputDevices()
     },
 
     async getOutputDevices(): Promise<string[]> {
-        return (AppBindings as any).GetOutputDevices()
+        return AppBindings.ListAudioOutputDevices()
     },
 
     Events: {

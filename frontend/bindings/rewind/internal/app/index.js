@@ -11,7 +11,6 @@ export {
     Clip,
     Config,
     DisplayInfo,
-    EncoderInfo,
     State,
     Status
 } from "./models.js";

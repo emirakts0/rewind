@@ -5,11 +5,12 @@
 <h1 align="center">Rewind</h1>
 
 <p align="center">
-  An elegant screen recording application with instant replay capability, written in Go and powered by FFmpeg.
+  An elegant screen recording application with instant replay capability, written in Go and Rust, powered by FFmpeg.
 </p>
 
 <div align="center">
 
+[![Rust](https://img.shields.io/badge/Rust-000000?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![Golang](https://img.shields.io/badge/Golang-00ADD8?logo=go&logoColor=white)](https://golang.org)
 [![FFmpeg](https://img.shields.io/badge/FFmpeg-FF0000?logo=ffmpeg&logoColor=white)](https://ffmpeg.org)
 [![Windows](https://custom-icon-badges.demolab.com/badge/Windows-0078D6?logo=windows11&logoColor=white)](#)
@@ -33,13 +34,13 @@
 
 ## Overview
 
-Rewind continuously captures your screen in the background and lets you save the last moments on demand. Built with performance in mind for a seamless recording experience.
+Rewind continuously captures your screen in the background and lets you save the last moments on demand. Built with Rust for high-performance video capture and Go for application logic.
 
 
 ## Features
 
 - **Instant Replay** - Capture the last N seconds of screen activity with a single keystroke
-- **Hardware Acceleration** - Automatic GPU detection and encoding (NVIDIA NVENC, AMD AMF, Intel QuickSync)
+- **Hardware Acceleration** - Native Windows Graphics Capture API with GPU encoding (H264)
 - **Audio Capture** - Record system audio and microphone simultaneously with independent volume controls
 - **System Tray Integration** - Runs silently in the background with quick access via tray icon
 - **Global Hotkeys** - Control recording without leaving your current application
@@ -49,10 +50,11 @@ Rewind continuously captures your screen in the background and lets you save the
 
 ## Tech Stack
 
-- **Go** - High-performance backend logic and orchestration
+- **Rust** - High-performance native video/audio capture using Windows Graphics Capture API
+- **Go** - Application logic and orchestration
 - **Wails v3** - Modern desktop application framework
-- **FFmpeg** - Industry-standard video processing and hardware encoding (NVENC, AMF, QuickSync)
-- **WASAPI** - Low-latency Windows Audio Session API for loopback and microphone capture
+- **FFmpeg** - Video segment concatenation and audio muxing
+- **CPAL** - Cross-platform audio library for microphone and loopback capture
 - **React** - Dynamic and responsive frontend user interface
 - **TypeScript** - Type-safe development for robust code
 
@@ -102,6 +104,7 @@ Rewind continuously captures your screen in the background and lets you save the
 ### Prerequisites
 
 ```bash
+    # Install Rust (latest stable)
     # Install Go (1.21+)
     # Install Node.js (18+)
     # Install Wails CLI
@@ -127,12 +130,14 @@ Rewind continuously captures your screen in the background and lets you save the
 
 ## Architecture
 
-Rewind uses a circular buffer approach to maintain recent screen captures in memory:
+Rewind uses a circular buffer approach with native Windows capture:
 
-- **Capture Thread**: Continuously captures screen frames using GPU-accelerated encoding
-- **Audio Thread**: Records system and microphone audio via WASAPI
-- **Buffer Manager**: Maintains a rolling window of video segments
-- **Save Thread**: Assembles and exports clips when triggered
+- **Rust Capture Engine**: Uses Windows Graphics Capture API for zero-copy GPU frame capture
+- **Video Encoder**: Hardware-accelerated H264 encoding via Windows Media Foundation
+- **Audio Capture**: CPAL-based microphone and loopback recording with circular buffers
+- **Segment Manager**: Maintains rolling window of N-second video segments
+- **Go Application Layer**: Orchestrates capture, manages UI, and handles user interactions
+- **FFmpeg Integration**: Concatenates segments and muxes audio on save
 
 ## License
 

@@ -9,10 +9,9 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"path/filepath"
+	"rewind/internal/utils"
 
 	"rewind/internal/app"
-	"rewind/internal/input"
-	"rewind/internal/logging"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -62,7 +61,6 @@ type TrayManager struct {
 	rewindApp *app.App
 	menu      *application.Menu
 
-	// Menu items that need updating
 	statusItem    *application.MenuItem
 	startStopItem *application.MenuItem
 	saveItem      *application.MenuItem
@@ -114,9 +112,9 @@ func (t *TrayManager) createMenu() {
 	t.startStopItem = t.menu.Add("Start Recording")
 	t.startStopItem.OnClick(func(ctx *application.Context) {
 		if t.rewindApp.IsRecording() {
-			t.rewindApp.Stop()
+			t.rewindApp.StopRecording()
 		} else {
-			t.rewindApp.Start()
+			t.rewindApp.StartRecording()
 		}
 		t.UpdateState()
 	})
@@ -126,7 +124,7 @@ func (t *TrayManager) createMenu() {
 	t.saveItem.SetEnabled(false)
 	t.saveItem.OnClick(func(ctx *application.Context) {
 		if t.rewindApp.IsRecording() {
-			t.rewindApp.SaveClip()
+			t.rewindApp.SaveCurrentClip()
 		}
 	})
 
@@ -144,11 +142,11 @@ func (t *TrayManager) createMenu() {
 		t.UpdateShowHideLabel()
 	})
 
-	// Reload UI (for testing - simulates frontend crash recovery)
+	// Reload UI
 	reloadItem := t.menu.Add("Reload UI")
 	reloadItem.OnClick(func(ctx *application.Context) {
 		t.window.Reload()
-		slog.Info("UI reloaded - frontend should fetch state from backend")
+		slog.Info("UI reloaded")
 	})
 
 	t.menu.AddSeparator()
@@ -156,9 +154,8 @@ func (t *TrayManager) createMenu() {
 	// Quit
 	quitItem := t.menu.Add("Quit Rewind")
 	quitItem.OnClick(func(ctx *application.Context) {
-		// Stop recording before quit
 		if t.rewindApp.IsRecording() {
-			t.rewindApp.Stop()
+			t.rewindApp.StopRecording()
 		}
 		t.app.Quit()
 	})
@@ -196,11 +193,11 @@ func (t *TrayManager) UpdateShowHideLabel() {
 }
 
 func main() {
-	logPath := logging.GetDefaultLogPath()
-	if err := logging.Setup(logPath, true); err != nil {
+	logPath := utils.GetDefaultLogPath()
+	if err := utils.Setup(logPath, true); err != nil {
 		log.Printf("Failed to setup logging: %v", err)
 	}
-	defer logging.Close()
+	defer utils.Close()
 
 	ffmpegPath := getFFmpegPath()
 	slog.Info("Using FFmpeg", "path", ffmpegPath)
@@ -272,32 +269,32 @@ func main() {
 		trayManager.UpdateShowHideLabel()
 	})
 
+	// Set callback for state changes to update tray
+	rewindApp.SetOnStateChange(func(state app.State) {
+		trayManager.UpdateState()
+	})
+
 	// Global Hotkeys (works system-wide)
-	hkManager := input.NewHotkeyManager()
+	hkManager := utils.NewHotkeyManager()
 
 	// Start/Stop: Ctrl+F9
 	hkManager.Register(1, func() {
 		if rewindApp.IsRecording() {
-			rewindApp.Stop()
+			rewindApp.StopRecording()
 		} else {
-			rewindApp.Start()
+			rewindApp.StartRecording()
 		}
 	})
 
 	// Save Clip: Ctrl+F10
 	hkManager.Register(2, func() {
 		if rewindApp.IsRecording() {
-			rewindApp.SaveClip()
+			rewindApp.SaveCurrentClip()
 		}
 	})
 
 	hkManager.Start()
 	defer hkManager.Stop()
-
-	// Set callback for state changes to update tray
-	rewindApp.SetOnStateChange(func(state app.State) {
-		trayManager.UpdateState()
-	})
 
 	err := appInstance.Run()
 	if err != nil {

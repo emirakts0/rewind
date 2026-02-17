@@ -1,4 +1,4 @@
-package logging
+package utils
 
 import (
 	"fmt"
@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"rewind/internal/utils"
 
 	"gopkg.in/natefinch/lumberjack.v2"
 )
@@ -73,10 +72,12 @@ func Close() {
 
 // GetDefaultLogPath returns the log file path in user's AppData directory
 func GetDefaultLogPath() string {
-	logsDir, err := utils.GetLogsDir()
+	// %LOCALAPPDATA%\Rewind\logs\rewind.log
+	cacheDir, err := os.UserCacheDir()
 	if err != nil {
 		// Fallback to current directory if AppData is not available
 		return filepath.Join(".", "logs", "rewind.log")
 	}
+	logsDir := filepath.Join(cacheDir, "Rewind", "logs")
 	return filepath.Join(logsDir, "rewind.log")
 }

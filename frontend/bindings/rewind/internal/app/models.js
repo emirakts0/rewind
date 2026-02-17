@@ -10,9 +10,6 @@ import { Create as $Create } from "@wailsio/runtime";
 // @ts-ignore: Unused imports
 import * as time$0 from "../../../time/models.js";
 
-/**
- * Clip represents a saved video file
- */
 export class Clip {
     /**
      * Creates a new Clip instance.
@@ -78,13 +75,6 @@ export class Config {
              */
             this["displayIndex"] = 0;
         }
-        if (!("encoderName" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["encoderName"] = "";
-        }
         if (!("fps" in $$source)) {
             /**
              * @member
@@ -94,10 +84,11 @@ export class Config {
         }
         if (!("bitrate" in $$source)) {
             /**
+             * in Mbps
              * @member
-             * @type {string}
+             * @type {number}
              */
-            this["bitrate"] = "";
+            this["bitrate"] = 0;
         }
         if (!("recordSeconds" in $$source)) {
             /**
@@ -113,26 +104,35 @@ export class Config {
              */
             this["outputDir"] = "";
         }
-        if (!("convertToMP4" in $$source)) {
+        if (!("microphoneDevice" in $$source)) {
+            /**
+             * device index, -1 = disabled
+             * @member
+             * @type {number}
+             */
+            this["microphoneDevice"] = 0;
+        }
+        if (!("systemAudioDevice" in $$source)) {
+            /**
+             * device index, -1 = disabled
+             * @member
+             * @type {number}
+             */
+            this["systemAudioDevice"] = 0;
+        }
+        if (!("showCursor" in $$source)) {
             /**
              * @member
              * @type {boolean}
              */
-            this["convertToMP4"] = false;
+            this["showCursor"] = false;
         }
-        if (!("microphoneDevice" in $$source)) {
+        if (!("showBorder" in $$source)) {
             /**
              * @member
-             * @type {string}
+             * @type {boolean}
              */
-            this["microphoneDevice"] = "";
-        }
-        if (!("systemAudioDevice" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["systemAudioDevice"] = "";
+            this["showBorder"] = false;
         }
 
         Object.assign(this, $$source);
@@ -149,9 +149,6 @@ export class Config {
     }
 }
 
-/**
- * DisplayInfo is display info for frontend
- */
 export class DisplayInfo {
     /**
      * Creates a new DisplayInfo instance.
@@ -212,51 +209,6 @@ export class DisplayInfo {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new DisplayInfo(/** @type {Partial<DisplayInfo>} */($$parsedSource));
-    }
-}
-
-/**
- * EncoderInfo is encoder info for frontend
- */
-export class EncoderInfo {
-    /**
-     * Creates a new EncoderInfo instance.
-     * @param {Partial<EncoderInfo>} [$$source = {}] - The source object to create the EncoderInfo.
-     */
-    constructor($$source = {}) {
-        if (!("name" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["name"] = "";
-        }
-        if (!("codec" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["codec"] = "";
-        }
-        if (!("gpuName" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["gpuName"] = "";
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new EncoderInfo instance from a string or object.
-     * @param {any} [$$source = {}]
-     * @returns {EncoderInfo}
-     */
-    static createFrom($$source = {}) {
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new EncoderInfo(/** @type {Partial<EncoderInfo>} */($$parsedSource));
     }
 }
 
@@ -328,5 +280,4 @@ export const Status = {
     StatusIdle: "idle",
     StatusRecording: "recording",
     StatusSaving: "saving",
-    StatusError: "error",
 };
