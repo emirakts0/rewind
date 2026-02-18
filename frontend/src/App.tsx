@@ -99,7 +99,7 @@ function App() {
     }, [])
 
     useEffect(() => {
-        const unsub = api.Events.On('state-changed', (event: any) => {
+        const unsubState = api.Events.On('state-changed', (event: any) => {
             const s = event.data as State
             console.log("State changed:", s)
             setState(s)
@@ -109,8 +109,26 @@ function App() {
             }
         })
 
+        const unsubRuntimeError = api.Events.On('runtime-error', (event: any) => {
+            const { level, message } = event.data as { level: string; message: string }
+            console.log("Runtime error:", level, message)
+            
+            if (level === 'error') {
+                toast.error(message, {
+                    description: "Recording error",
+                    duration: 5000,
+                })
+            } else if (level === 'warning') {
+                toast.warning(message, {
+                    description: "Recording warning",
+                    duration: 4000,
+                })
+            }
+        })
+
         return () => {
-            unsub()
+            unsubState()
+            unsubRuntimeError()
         }
     }, [configOpen])
 

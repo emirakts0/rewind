@@ -21,6 +21,9 @@ var (
 	procFreeString       *syscall.LazyProc
 	procGetStatus        *syscall.LazyProc
 	procSetLogCallback   *syscall.LazyProc
+
+	// Callback for runtime errors/warnings from Rust
+	runtimeErrorCallback func(level string, message string)
 )
 
 func init() {
@@ -40,6 +43,11 @@ func Load(path string) {
 	procSetLogCallback = mod.NewProc("rewind_set_log_callback")
 }
 
+// SetRuntimeErrorCallback sets a callback for runtime errors/warnings from Rust
+func SetRuntimeErrorCallback(callback func(level string, message string)) {
+	runtimeErrorCallback = callback
+}
+
 // rustLogCallback is called from Rust code to log messages
 func rustLogCallback(level int32, message uintptr) uintptr {
 	if message == 0 {
@@ -51,8 +59,14 @@ func rustLogCallback(level int32, message uintptr) uintptr {
 	switch level {
 	case 0: // Error
 		slog.Error(msg, "source", "rust")
+		if runtimeErrorCallback != nil {
+			runtimeErrorCallback("error", msg)
+		}
 	case 1: // Warn
 		slog.Warn(msg, "source", "rust")
+		if runtimeErrorCallback != nil {
+			runtimeErrorCallback("warning", msg)
+		}
 	case 2: // Info
 		slog.Info(msg, "source", "rust")
 	case 3: // Debug
@@ -148,42 +162,84 @@ func stringToPtr(s string) uintptr {
 
 // --- API Functions ---
 
+type MonitorsResult struct {
+	Success bool             `json:"success"`
+	Data    *json.RawMessage `json:"data"`
+	Error   *string          `json:"error"`
+}
+
 func GetMonitors() ([]MonitorInfo, error) {
 	ptr, _, _ := procGetMonitors.Call()
 	if ptr == 0 {
-		return nil, fmt.Errorf("failed to get monitors")
+		return nil, fmt.Errorf("failed to get monitors: no response from native library")
 	}
 	defer procFreeString.Call(ptr)
 
 	jsonStr := ptrToString(ptr)
-	if jsonStr == "" {
+	var result MonitorsResult
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		return nil, fmt.Errorf("failed to parse monitors result: %v", err)
+	}
+
+	if !result.Success {
+		if result.Error != nil {
+			return nil, fmt.Errorf(*result.Error)
+		}
+		return nil, fmt.Errorf("failed to get monitors: unknown error")
+	}
+
+	if result.Data == nil {
 		return []MonitorInfo{}, nil
 	}
 
 	var monitors []MonitorInfo
-	if err := json.Unmarshal([]byte(jsonStr), &monitors); err != nil {
-		return nil, fmt.Errorf("json error: %v", err)
+	if err := json.Unmarshal(*result.Data, &monitors); err != nil {
+		return nil, fmt.Errorf("failed to parse monitors data: %v", err)
 	}
 	return monitors, nil
+}
+
+type AudioDevicesResult struct {
+	Success bool             `json:"success"`
+	Data    *json.RawMessage `json:"data"`
+	Error   *string          `json:"error"`
 }
 
 func ListAudioDevices() ([]AudioDeviceInfo, error) {
 	ptr, _, _ := procListAudioDevices.Call()
 	if ptr == 0 {
-		return nil, fmt.Errorf("failed to list audio devices")
+		return nil, fmt.Errorf("failed to list audio devices: no response from native library")
 	}
 	defer procFreeString.Call(ptr)
 
 	jsonStr := ptrToString(ptr)
-	if jsonStr == "" {
+	var result AudioDevicesResult
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		return nil, fmt.Errorf("failed to parse audio devices result: %v", err)
+	}
+
+	if !result.Success {
+		if result.Error != nil {
+			return nil, fmt.Errorf(*result.Error)
+		}
+		return nil, fmt.Errorf("failed to list audio devices: unknown error")
+	}
+
+	if result.Data == nil {
 		return []AudioDeviceInfo{}, nil
 	}
 
 	var devices []AudioDeviceInfo
-	if err := json.Unmarshal([]byte(jsonStr), &devices); err != nil {
-		return nil, fmt.Errorf("json error: %v", err)
+	if err := json.Unmarshal(*result.Data, &devices); err != nil {
+		return nil, fmt.Errorf("failed to parse audio devices data: %v", err)
 	}
 	return devices, nil
+}
+
+type InitResult struct {
+	Success bool    `json:"success"`
+	Handle  uintptr `json:"handle"`
+	Error   *string `json:"error"`
 }
 
 type Handle uintptr
@@ -191,29 +247,63 @@ type Handle uintptr
 func InitReplayBuffer(monitorIndex int, config ReplayRecordingConfig) (Handle, error) {
 	configJson, err := json.Marshal(config)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to marshal config: %w", err)
 	}
 
 	ptr := stringToPtr(string(configJson))
 
-	handlePtr, _, _ := procInit.Call(
+	resultPtr, _, _ := procInit.Call(
 		uintptr(uint32(monitorIndex)),
 		ptr,
 	)
 
-	if handlePtr == 0 {
-		return 0, fmt.Errorf("failed to initialize replay buffer")
+	if resultPtr == 0 {
+		return 0, fmt.Errorf("failed to initialize replay buffer: no response from native library")
+	}
+	defer procFreeString.Call(resultPtr)
+
+	jsonStr := ptrToString(resultPtr)
+	var result InitResult
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		return 0, fmt.Errorf("failed to parse init result: %v", err)
 	}
 
-	return Handle(handlePtr), nil
+	if !result.Success {
+		if result.Error != nil {
+			return 0, fmt.Errorf("%s", *result.Error)
+		}
+		return 0, fmt.Errorf("initialization failed: unknown error")
+	}
+
+	return Handle(result.Handle), nil
+}
+
+type SaveResult struct {
+	Success bool    `json:"success"`
+	Error   *string `json:"error"`
 }
 
 func (h Handle) Save(path string) error {
 	pathPtr := stringToPtr(path)
-	ret, _, _ := procSave.Call(uintptr(h), pathPtr)
-	if int32(ret) != 0 {
-		return fmt.Errorf("save failed with error code %d", int32(ret))
+	ptr, _, _ := procSave.Call(uintptr(h), pathPtr)
+	if ptr == 0 {
+		return fmt.Errorf("save failed: no response from native library")
 	}
+	defer procFreeString.Call(ptr)
+
+	jsonStr := ptrToString(ptr)
+	var result SaveResult
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		return fmt.Errorf("failed to parse save result: %v", err)
+	}
+
+	if !result.Success {
+		if result.Error != nil {
+			return fmt.Errorf("%s", *result.Error)
+		}
+		return fmt.Errorf("save failed: unknown error")
+	}
+
 	return nil
 }
 
@@ -221,17 +311,35 @@ func (h Handle) Stop() {
 	procStop.Call(uintptr(h))
 }
 
+type StatusResult struct {
+	Success bool          `json:"success"`
+	Data    *ReplayStatus `json:"data"`
+	Error   *string       `json:"error"`
+}
+
 func (h Handle) GetStatus() (*ReplayStatus, error) {
 	ptr, _, _ := procGetStatus.Call(uintptr(h))
 	if ptr == 0 {
-		return nil, fmt.Errorf("failed to get status")
+		return nil, fmt.Errorf("failed to get status: no response from native library")
 	}
 	defer procFreeString.Call(ptr)
 
 	jsonStr := ptrToString(ptr)
-	var status ReplayStatus
-	if err := json.Unmarshal([]byte(jsonStr), &status); err != nil {
-		return nil, fmt.Errorf("json error: %v", err)
+	var result StatusResult
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		return nil, fmt.Errorf("failed to parse status result: %v", err)
 	}
-	return &status, nil
+
+	if !result.Success {
+		if result.Error != nil {
+			return nil, fmt.Errorf(*result.Error)
+		}
+		return nil, fmt.Errorf("failed to get status: unknown error")
+	}
+
+	if result.Data == nil {
+		return nil, fmt.Errorf("status data is null")
+	}
+
+	return result.Data, nil
 }

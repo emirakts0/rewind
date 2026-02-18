@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -121,6 +122,9 @@ func New(ffmpegPath string) *App {
 	if err := app.LoadConfig(); err != nil {
 		slog.Warn("failed to load config", "error", err)
 	}
+
+	// Set up runtime error callback from Rust
+	native.SetRuntimeErrorCallback(app.handleRuntimeError)
 
 	return app
 }
@@ -382,14 +386,14 @@ func (a *App) SaveCurrentClip() (string, error) {
 	}
 
 	if a.replayHandle == 0 {
-		return "", fmt.Errorf("not initialized")
+		return "", fmt.Errorf("replay buffer not initialized")
 	}
 
 	filename := fmt.Sprintf("clip_%s.mp4", time.Now().Format("20060102_150405"))
 	outputPath := filepath.Join(a.config.OutputDir, filename)
 
 	if err := a.replayHandle.Save(outputPath); err != nil {
-		return "", fmt.Errorf("save failed: %w", err)
+		return "", err
 	}
 
 	a.lastSaveTime = time.Now()
@@ -535,6 +539,50 @@ func (a *App) updateBufferStatus() {
 		// Emit state change event
 		if a.app != nil {
 			a.app.Event.Emit("state-changed", state)
+		}
+	}
+}
+
+// handleRuntimeError handles runtime errors/warnings from Rust during recording
+func (a *App) handleRuntimeError(level string, message string) {
+	a.mu.RLock()
+	isRecording := a.state.Status == StatusRecording
+	a.mu.RUnlock()
+
+	// Only handle errors during recording
+	if !isRecording {
+		return
+	}
+
+	// Emit runtime error event to frontend
+	if a.app != nil {
+		a.app.Event.Emit("runtime-error", map[string]string{
+			"level":   level,
+			"message": message,
+		})
+	}
+
+	// If it's a critical error, stop recording
+	if level == "error" {
+		// Check for critical errors that should stop recording
+		criticalKeywords := []string{
+			"Failed to send frame",
+			"encoder",
+			"capture",
+			"monitor",
+		}
+
+		for _, keyword := range criticalKeywords {
+			if strings.Contains(strings.ToLower(message), strings.ToLower(keyword)) {
+				slog.Error("critical error detected, stopping recording", "message", message)
+				go func() {
+					time.Sleep(100 * time.Millisecond)
+					if err := a.StopRecording(); err != nil {
+						slog.Error("failed to stop recording after critical error", "error", err)
+					}
+				}()
+				return
+			}
 		}
 	}
 }
