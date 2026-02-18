@@ -1,4 +1,4 @@
-package utils
+package internal
 
 import (
 	"log/slog"
@@ -51,6 +51,29 @@ func (h *HotkeyManager) Start() {
 
 func (h *HotkeyManager) Stop() {
 	close(h.quit)
+}
+
+// SetupDefaultHotkeys registers the default hotkeys for the app
+func (h *HotkeyManager) SetupDefaultHotkeys(rewindApp *App) {
+	// Ctrl+F9: Start/Stop Recording
+	h.Register(1, func() {
+		if rewindApp.GetRecordingState().Status == StatusRecording {
+			if err := rewindApp.StopRecording(); err != nil {
+				slog.Error("Failed to stop recording via hotkey", "error", err)
+			}
+		} else {
+			if err := rewindApp.StartRecording(); err != nil {
+				slog.Error("Failed to start recording via hotkey", "error", err)
+			}
+		}
+	})
+
+	// Ctrl+F10: Save Clip
+	h.Register(2, func() {
+		if _, err := rewindApp.SaveCurrentClip(); err != nil {
+			slog.Error("Failed to save clip via hotkey", "error", err)
+		}
+	})
 }
 
 func (h *HotkeyManager) loop() {

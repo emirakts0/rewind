@@ -13,7 +13,7 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as application$0 from "../../../github.com/wailsapp/wails/v3/pkg/application/models.js";
+import * as application$0 from "../../github.com/wailsapp/wails/v3/pkg/application/models.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -24,7 +24,7 @@ import * as $models from "./models.js";
  * @returns {$CancellablePromise<string>}
  */
 export function ChooseOutputDirectory() {
-    return $Call.ByID(785859534);
+    return $Call.ByID(599212062);
 }
 
 /**
@@ -33,7 +33,7 @@ export function ChooseOutputDirectory() {
  * @returns {$CancellablePromise<void>}
  */
 export function DeleteClips(paths) {
-    return $Call.ByID(338452631, paths);
+    return $Call.ByID(548297735, paths);
 }
 
 /**
@@ -41,7 +41,7 @@ export function DeleteClips(paths) {
  * @returns {$CancellablePromise<$models.Config>}
  */
 export function GetConfig() {
-    return $Call.ByID(54167495).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(1694563895).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }
@@ -51,7 +51,7 @@ export function GetConfig() {
  * @returns {$CancellablePromise<$models.State>}
  */
 export function GetRecordingState() {
-    return $Call.ByID(2498978161).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2091198017).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
 }
@@ -61,7 +61,7 @@ export function GetRecordingState() {
  * @returns {$CancellablePromise<boolean>}
  */
 export function IsRecording() {
-    return $Call.ByID(3417054602);
+    return $Call.ByID(3798332410);
 }
 
 /**
@@ -69,7 +69,7 @@ export function IsRecording() {
  * @returns {$CancellablePromise<string[]>}
  */
 export function ListAudioInputDevices() {
-    return $Call.ByID(2973957192).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(835038936).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType2($result);
     }));
 }
@@ -79,7 +79,7 @@ export function ListAudioInputDevices() {
  * @returns {$CancellablePromise<string[]>}
  */
 export function ListAudioOutputDevices() {
-    return $Call.ByID(4007188933).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(773111029).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType2($result);
     }));
 }
@@ -89,7 +89,7 @@ export function ListAudioOutputDevices() {
  * @returns {$CancellablePromise<$models.DisplayInfo[]>}
  */
 export function ListAvailableDisplays() {
-    return $Call.ByID(4189349241).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2915834793).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType4($result);
     }));
 }
@@ -99,7 +99,7 @@ export function ListAvailableDisplays() {
  * @returns {$CancellablePromise<$models.Clip[]>}
  */
 export function ListSavedClips() {
-    return $Call.ByID(971799233).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2212529137).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType6($result);
     }));
 }
@@ -108,7 +108,7 @@ export function ListSavedClips() {
  * @returns {$CancellablePromise<void>}
  */
 export function LoadConfig() {
-    return $Call.ByID(2921272697);
+    return $Call.ByID(2242605417);
 }
 
 /**
@@ -117,7 +117,7 @@ export function LoadConfig() {
  * @returns {$CancellablePromise<void>}
  */
 export function OpenClipInExplorer(path) {
-    return $Call.ByID(276444365, path);
+    return $Call.ByID(2652525693, path);
 }
 
 /**
@@ -125,7 +125,7 @@ export function OpenClipInExplorer(path) {
  * @returns {$CancellablePromise<void>}
  */
 export function OpenOutputDirectory() {
-    return $Call.ByID(2470192441);
+    return $Call.ByID(3418556617);
 }
 
 /**
@@ -133,7 +133,7 @@ export function OpenOutputDirectory() {
  * @returns {$CancellablePromise<string>}
  */
 export function SaveCurrentClip() {
-    return $Call.ByID(1473988601);
+    return $Call.ByID(2434937833);
 }
 
 /**
@@ -142,7 +142,7 @@ export function SaveCurrentClip() {
  * @returns {$CancellablePromise<void>}
  */
 export function SetApp(app) {
-    return $Call.ByID(3791233416, app);
+    return $Call.ByID(2007597560, app);
 }
 
 /**
@@ -151,7 +151,7 @@ export function SetApp(app) {
  * @returns {$CancellablePromise<void>}
  */
 export function SetOnStateChange(callback) {
-    return $Call.ByID(2855291673, callback);
+    return $Call.ByID(1991470825, callback);
 }
 
 /**
@@ -159,14 +159,14 @@ export function SetOnStateChange(callback) {
  * @returns {$CancellablePromise<void>}
  */
 export function StartRecording() {
-    return $Call.ByID(3539635664);
+    return $Call.ByID(2539368448);
 }
 
 /**
  * @returns {$CancellablePromise<void>}
  */
 export function StopRecording() {
-    return $Call.ByID(3285276366);
+    return $Call.ByID(3624110398);
 }
 
 /**
@@ -174,7 +174,7 @@ export function StopRecording() {
  * @returns {$CancellablePromise<void>}
  */
 export function UpdateConfig(cfg) {
-    return $Call.ByID(1042957124, cfg);
+    return $Call.ByID(451596308, cfg);
 }
 
 // Private type creation functions

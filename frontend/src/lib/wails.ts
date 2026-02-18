@@ -38,7 +38,7 @@ export interface State {
     memoryUsageMB: number
 }
 
-import * as AppBindings from '../../bindings/rewind/internal/app/app'
+import { App as AppBindings } from '../../bindings/rewind/internal'
 import { Events } from "@wailsio/runtime"
 
 export const api = {

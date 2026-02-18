@@ -1,4 +1,4 @@
-package native
+package internal
 
 import (
 	"encoding/json"

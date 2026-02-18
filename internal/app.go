@@ -1,4 +1,4 @@
-package app
+package internal
 
 import (
 	"context"
@@ -10,9 +10,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"rewind/internal/native"
-	"rewind/internal/utils"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -43,7 +40,7 @@ type Config struct {
 
 func DefaultConfig() Config {
 	outputDir := "./clips"
-	if dir, err := utils.GetClipsDir(); err == nil {
+	if dir, err := GetClipsDir(); err == nil {
 		outputDir = dir
 	}
 
@@ -84,7 +81,7 @@ type App struct {
 	ffmpegPath string
 
 	state        State
-	replayHandle native.Handle
+	replayHandle Handle
 	startTime    time.Time
 	lastSaveTime time.Time
 
@@ -104,7 +101,7 @@ func New(ffmpegPath string) *App {
 	}
 
 	// Set up runtime error callback from Rust
-	native.SetRuntimeErrorCallback(app.handleRuntimeError)
+	SetRuntimeErrorCallback(app.handleRuntimeError)
 
 	return app
 }
@@ -123,7 +120,7 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	a.ctx = ctx
 	slog.Info("Rewind service starting up...")
 
-	if err := utils.CleanupTempSegments(); err != nil {
+	if err := CleanupTempSegments(); err != nil {
 		slog.Warn("failed to cleanup temp segments on startup", "error", err)
 	}
 
@@ -143,7 +140,7 @@ func (a *App) ServiceShutdown() error {
 
 // ListAvailableDisplays returns all available displays/monitors
 func (a *App) ListAvailableDisplays() []DisplayInfo {
-	monitors, err := native.GetMonitors()
+	monitors, err := GetMonitors()
 	if err != nil {
 		slog.Error("failed to get monitors", "error", err)
 		return nil
@@ -165,7 +162,7 @@ func (a *App) ListAvailableDisplays() []DisplayInfo {
 
 // ListAudioInputDevices returns available microphone devices
 func (a *App) ListAudioInputDevices() []string {
-	devices, err := native.ListAudioDevices()
+	devices, err := ListAudioDevices()
 	if err != nil {
 		slog.Error("failed to list audio devices", "error", err)
 		return nil
@@ -182,7 +179,7 @@ func (a *App) ListAudioInputDevices() []string {
 
 // ListAudioOutputDevices returns available speaker/loopback devices
 func (a *App) ListAudioOutputDevices() []string {
-	devices, err := native.ListAudioDevices()
+	devices, err := ListAudioDevices()
 	if err != nil {
 		slog.Error("failed to list audio devices", "error", err)
 		return nil
@@ -253,7 +250,7 @@ func (a *App) StartRecording() error {
 	}
 
 	// Get monitor info
-	monitors, err := native.GetMonitors()
+	monitors, err := GetMonitors()
 	if err != nil {
 		return fmt.Errorf("failed to get monitors: %w", err)
 	}
@@ -271,7 +268,7 @@ func (a *App) StartRecording() error {
 	}
 	if a.config.SystemAudioDevice >= 0 {
 		// they are indexed after all input devices so we need to add the number of input devices to the index
-		inputDevices, err := native.ListAudioDevices()
+		inputDevices, err := ListAudioDevices()
 		if err != nil {
 			return fmt.Errorf("failed to list audio devices: %w", err)
 		}
@@ -287,7 +284,7 @@ func (a *App) StartRecording() error {
 		speakerIdx = &adjustedIdx
 	}
 
-	audioConfig := native.AudioConfig{
+	audioConfig := AudioConfig{
 		SampleRate:         48000,
 		Channels:           2,
 		MicEnabled:         micIdx != nil,
@@ -298,14 +295,14 @@ func (a *App) StartRecording() error {
 		SpeakerVolume:      float32(a.config.SystemAudioVolume) / 100.0,
 	}
 
-	tempDir, err := utils.GetTempSegmentsDir()
+	tempDir, err := GetTempSegmentsDir()
 	if err != nil {
 		return fmt.Errorf("failed to get temp directory: %w", err)
 	}
 
 	actualBufferDuration := uint64(a.config.RecordSeconds + a.config.SegmentDurationSec)
 
-	config := native.ReplayRecordingConfig{
+	config := ReplayRecordingConfig{
 		Width:               monitor.Width,
 		Height:              monitor.Height,
 		Fps:                 uint32(a.config.FPS),
@@ -319,7 +316,7 @@ func (a *App) StartRecording() error {
 		TempPath:            tempDir,
 	}
 
-	handle, err := native.InitReplayBuffer(a.config.DisplayIndex, config)
+	handle, err := InitReplayBuffer(a.config.DisplayIndex, config)
 	if err != nil {
 		a.setState(StatusIdle, "")
 		return fmt.Errorf("failed to start replay buffer: %w", err)

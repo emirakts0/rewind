@@ -282,6 +282,14 @@ export function ConfigPanel({
                             <TabsContent value="audio" className="animate-in slide-in-from-right-2 duration-300 fade-in-0 mt-0">
                                 <ScrollArea className="h-[280px] -mx-4 w-[calc(100%+2rem)]">
                                     <div className="space-y-3 px-4 py-2">
+                                        {/* Audio Info Banner */}
+                                        <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-muted/30 border border-border/30">
+                                            <Info className="w-3.5 h-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                            <p className="text-[10px] text-muted-foreground leading-relaxed">
+                                                Volume levels are relative to Windows system settings. Adjust Windows audio mixer for absolute control.
+                                            </p>
+                                        </div>
+
                                         {/* Microphone Selection */}
                                         <AudioDeviceSelector
                                             label="Microphone"

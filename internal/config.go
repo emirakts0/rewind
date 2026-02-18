@@ -1,18 +1,16 @@
-package app
+package internal
 
 import (
 	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
-
-	"rewind/internal/utils"
 )
 
 const configFileName = "settings.json"
 
 func getConfigFilePath() (string, error) {
-	configDir, err := utils.GetConfigDir()
+	configDir, err := GetConfigDir()
 	if err != nil {
 		return "", err
 	}

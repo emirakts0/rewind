@@ -8,7 +8,7 @@ import { Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as time$0 from "../../../time/models.js";
+import * as time$0 from "../../time/models.js";
 
 export class Clip {
     /**
@@ -228,54 +228,6 @@ export class DisplayInfo {
 }
 
 /**
- * MemoryEstimate holds estimated memory usage
- */
-export class MemoryEstimate {
-    /**
-     * Creates a new MemoryEstimate instance.
-     * @param {Partial<MemoryEstimate>} [$$source = {}] - The source object to create the MemoryEstimate.
-     */
-    constructor($$source = {}) {
-        if (!("diskMB" in $$source)) {
-            /**
-             * Estimated disk usage for video segments
-             * @member
-             * @type {number}
-             */
-            this["diskMB"] = 0;
-        }
-        if (!("memoryMB" in $$source)) {
-            /**
-             * Estimated RAM usage for audio buffers
-             * @member
-             * @type {number}
-             */
-            this["memoryMB"] = 0;
-        }
-        if (!("totalMB" in $$source)) {
-            /**
-             * Total estimated usage
-             * @member
-             * @type {number}
-             */
-            this["totalMB"] = 0;
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new MemoryEstimate instance from a string or object.
-     * @param {any} [$$source = {}]
-     * @returns {MemoryEstimate}
-     */
-    static createFrom($$source = {}) {
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new MemoryEstimate(/** @type {Partial<MemoryEstimate>} */($$parsedSource));
-    }
-}
-
-/**
  * State holds the current application state
  */
 export class State {
@@ -330,14 +282,6 @@ export class State {
              */
             this["memoryUsageMB"] = 0;
         }
-        if (!("estimate" in $$source)) {
-            /**
-             * estimated memory usage based on config
-             * @member
-             * @type {MemoryEstimate}
-             */
-            this["estimate"] = (new MemoryEstimate());
-        }
 
         Object.assign(this, $$source);
     }
@@ -348,11 +292,7 @@ export class State {
      * @returns {State}
      */
     static createFrom($$source = {}) {
-        const $$createField6_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("estimate" in $$parsedSource) {
-            $$parsedSource["estimate"] = $$createField6_0($$parsedSource["estimate"]);
-        }
         return new State(/** @type {Partial<State>} */($$parsedSource));
     }
 }
@@ -372,6 +312,3 @@ export const Status = {
     StatusRecording: "recording",
     StatusSaving: "saving",
 };
-
-// Private type creation functions
-const $$createType0 = MemoryEstimate.createFrom;

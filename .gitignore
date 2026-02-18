@@ -48,6 +48,6 @@ cpu_profile
 .build/
 
 # Rust
-native/rewind_capture/target/
+native/target/
 *.dll
 Cargo.lock

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from "framer-motion"
-import { FolderOpen, FileVideo, Clock, RefreshCcw, ArrowLeft, ExternalLink, Trash2, CheckCircle2, Circle, CheckSquare, Square } from 'lucide-react'
+import { FolderOpen, FileVideo, Clock, RefreshCcw, ArrowLeft, ExternalLink, Trash2, CheckCircle2, Circle } from 'lucide-react'
 import { api, type Clip } from '@/lib/wails'
 import { cn, formatBytes } from '@/lib/utils'
 

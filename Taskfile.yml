@@ -28,10 +28,10 @@ tasks:
 
   build:native:
     desc: Build Rust native library
-    dir: native/rewind_capture
+    dir: native
     cmds:
       - cargo build --release
-      - powershell -Command "Copy-Item target\release\rewind_api.dll ..\..\rewind_api.dll -Force"
+      - powershell -Command "Copy-Item target\release\rewind_api.dll ..\rewind_api.dll -Force"
 
   windows:build:
     desc: Build the Windows application
@@ -101,6 +101,6 @@ tasks:
     cmds:
       - powershell -Command "if (Test-Path .build) { Remove-Item -Recurse -Force .build }"
       - powershell -Command "if (Test-Path frontend/dist) { Remove-Item -Recurse -Force frontend/dist }"
-      - powershell -Command "if (Test-Path native/rewind_capture/target) { Remove-Item -Recurse -Force native/rewind_capture/target }"
+      - powershell -Command "if (Test-Path native/target) { Remove-Item -Recurse -Force native/target }"
       - powershell -Command "if (Test-Path rewind_api.dll) { Remove-Item -Force rewind_api.dll }"
       - powershell -Command "if (Test-Path rsrc_windows_amd64.syso) { Remove-Item -Force rsrc_windows_amd64.syso }"
