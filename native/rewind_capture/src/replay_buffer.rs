@@ -128,6 +128,38 @@ impl ReplayBuffer {
         speaker_audio_buffer: Option<&Arc<Mutex<CircularAudioBuffer>>>,
         audio_sample_rate: u32,
         audio_channels: u16,
+        mic_volume: f32,
+        speaker_volume: f32,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let timeout_duration = std::time::Duration::from_secs(45);
+        let start_time = Instant::now();
+        
+        let result = self.save_to_file_internal(
+            output_path,
+            mic_audio_buffer,
+            speaker_audio_buffer,
+            audio_sample_rate,
+            audio_channels,
+            mic_volume,
+            speaker_volume,
+            start_time,
+            timeout_duration,
+        );
+        
+        result
+    }
+
+    fn save_to_file_internal<P: AsRef<Path>>(
+        &self,
+        output_path: P,
+        mic_audio_buffer: Option<&Arc<Mutex<CircularAudioBuffer>>>,
+        speaker_audio_buffer: Option<&Arc<Mutex<CircularAudioBuffer>>>,
+        audio_sample_rate: u32,
+        audio_channels: u16,
+        mic_volume: f32,
+        speaker_volume: f32,
+        start_time: Instant,
+        timeout_duration: std::time::Duration,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let (segment_paths, video_wall_start, video_wall_end, seg_count, total_dur) = {
             let segments = self.segments.lock().unwrap();
@@ -167,6 +199,11 @@ impl ReplayBuffer {
         }
         concat_file.sync_all()?;
 
+        if start_time.elapsed() >= timeout_duration {
+            let _ = std::fs::remove_file(&concat_list_path);
+            return Err("Save operation timed out (45s limit exceeded)".into());
+        }
+
         let output = std::process::Command::new(&self.config.ffmpeg_path)
             .args(&[
                 "-f",
@@ -195,13 +232,17 @@ impl ReplayBuffer {
             return Err("FFmpeg video concat failed".into());
         }
 
-        // Get actual video duration
+        if start_time.elapsed() >= timeout_duration {
+            let _ = std::fs::remove_file(&concat_list_path);
+            let _ = std::fs::remove_file(&temp_video);
+            return Err("Save operation timed out during video concatenation".into());
+        }
+
         let ffprobe_path = Path::new(&self.config.ffmpeg_path)
             .parent()
             .unwrap_or(Path::new("."))
             .join("ffprobe");
 
-        // If specific path given but not found, fallback to "ffprobe" command
         let ffprobe_cmd = if ffprobe_path.exists() {
             ffprobe_path.to_string_lossy().to_string()
         } else {
@@ -227,7 +268,6 @@ impl ReplayBuffer {
 
         log::info!("   Video container duration: {:.2}s", video_duration);
 
-        // Extract audio from separate buffers
         let bpf = (audio_channels as usize) * 2;
 
         let mic_data = mic_audio_buffer.and_then(|buf| {
@@ -264,6 +304,23 @@ impl ReplayBuffer {
                 log::info!("Speaker audio: {:.2}s", dur);
             }
 
+            // Helper function to apply volume to audio data
+            let apply_volume = |data: &[u8], volume: f32| -> Vec<u8> {
+                let frames = data.len() / bpf;
+                let mut processed = Vec::with_capacity(data.len());
+                
+                for i in 0..frames {
+                    let offset = i * bpf;
+                    for ch in 0..(audio_channels as usize) {
+                        let byte_off = offset + ch * 2;
+                        let sample = i16::from_le_bytes([data[byte_off], data[byte_off + 1]]) as f32;
+                        let adjusted = (sample * volume).clamp(-32768.0, 32767.0) as i16;
+                        processed.extend_from_slice(&adjusted.to_le_bytes());
+                    }
+                }
+                processed
+            };
+
             let audio_data = match (&mic_data, &speaker_data) {
                 (Some(mic), Some(speaker)) => {
                     let max_len = mic.len().max(speaker.len());
@@ -289,7 +346,7 @@ impl ReplayBuffer {
                                 0.0
                             };
 
-                            let mixed_sample = (mic_sample * 0.7 + speaker_sample * 0.8)
+                            let mixed_sample = (mic_sample * mic_volume + speaker_sample * speaker_volume)
                                 .clamp(-32768.0, 32767.0)
                                 as i16;
                             mixed.extend_from_slice(&mixed_sample.to_le_bytes());
@@ -302,8 +359,8 @@ impl ReplayBuffer {
                     );
                     mixed
                 }
-                (Some(mic), None) => mic.clone(),
-                (None, Some(speaker)) => speaker.clone(),
+                (Some(mic), None) => apply_volume(mic, mic_volume),
+                (None, Some(speaker)) => apply_volume(speaker, speaker_volume),
                 (None, None) => unreachable!(),
             };
 
@@ -344,6 +401,13 @@ impl ReplayBuffer {
             audio_file.write_all(&final_audio)?;
             audio_file.sync_all()?;
 
+            if start_time.elapsed() >= timeout_duration {
+                let _ = std::fs::remove_file(&temp_audio);
+                let _ = std::fs::remove_file(&temp_video);
+                let _ = std::fs::remove_file(&concat_list_path);
+                return Err("Save operation timed out before muxing".into());
+            }
+
             log::info!("Muxing video + audio...");
 
             let ar_str = audio_sample_rate.to_string();
@@ -377,7 +441,6 @@ impl ReplayBuffer {
                 ])
                 .output()?;
 
-            // Log FFmpeg stderr
             if !output.stderr.is_empty() {
                 for line in String::from_utf8_lossy(&output.stderr).lines() {
                     if !line.trim().is_empty() {
@@ -393,8 +456,20 @@ impl ReplayBuffer {
             if !output.status.success() {
                 return Err("FFmpeg mux failed".into());
             }
+
+            if start_time.elapsed() >= timeout_duration {
+                let _ = std::fs::remove_file(output_path);
+                return Err("Save operation timed out after muxing".into());
+            }
         } else {
             log::info!("   No audio data available, saving video only...");
+            
+            if start_time.elapsed() >= timeout_duration {
+                let _ = std::fs::remove_file(&temp_video);
+                let _ = std::fs::remove_file(&concat_list_path);
+                return Err("Save operation timed out (45s limit exceeded)".into());
+            }
+            
             std::fs::rename(&temp_video, output_path)?;
             let _ = std::fs::remove_file(&concat_list_path);
         }
@@ -465,10 +540,13 @@ impl Drop for ReplayBuffer {
 pub struct ReplayBufferHandle {
     buffer: Arc<ReplayBuffer>,
     stop_signal: Arc<AtomicBool>,
+    is_saving: Arc<AtomicBool>,
     mic_audio_buffer: Option<Arc<Mutex<CircularAudioBuffer>>>,
     speaker_audio_buffer: Option<Arc<Mutex<CircularAudioBuffer>>>,
     audio_sample_rate: u32,
     audio_channels: u16,
+    mic_volume: f32,
+    speaker_volume: f32,
 }
 
 impl ReplayBufferHandle {
@@ -476,10 +554,13 @@ impl ReplayBufferHandle {
         Self {
             buffer,
             stop_signal: Arc::new(AtomicBool::new(false)),
+            is_saving: Arc::new(AtomicBool::new(false)),
             mic_audio_buffer: None,
             speaker_audio_buffer: None,
             audio_sample_rate: 48000,
             audio_channels: 2,
+            mic_volume: 1.0,
+            speaker_volume: 1.0,
         }
     }
 
@@ -497,17 +578,31 @@ impl ReplayBufferHandle {
         self.audio_channels = channels;
     }
 
+    pub fn set_audio_volumes(&mut self, mic_volume: f32, speaker_volume: f32) {
+        self.mic_volume = mic_volume;
+        self.speaker_volume = speaker_volume;
+    }
+
     pub fn save<P: AsRef<Path>>(
         &self,
         output_path: P,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.buffer.save_to_file(
+        if self.is_saving.swap(true, atomic::Ordering::SeqCst) {
+            return Err("Save operation already in progress".into());
+        }
+
+        let result = self.buffer.save_to_file(
             output_path,
             self.mic_audio_buffer.as_ref(),
             self.speaker_audio_buffer.as_ref(),
             self.audio_sample_rate,
             self.audio_channels,
-        )
+            self.mic_volume,
+            self.speaker_volume,
+        );
+
+        self.is_saving.store(false, atomic::Ordering::SeqCst);
+        result
     }
 
     pub fn duration(&self) -> f64 {
@@ -522,16 +617,25 @@ impl ReplayBufferHandle {
         self.stop_signal.store(true, atomic::Ordering::Relaxed);
     }
 
+    pub fn clear(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        if self.is_saving.load(atomic::Ordering::SeqCst) {
+            return Err("Cannot clear segments while saving".into());
+        }
+        self.buffer.clear()
+    }
+
     pub fn stop_signal(&self) -> Arc<AtomicBool> {
         self.stop_signal.clone()
     }
 
-    /// Returns total disk space used by video segments in bytes
+    pub fn is_saving(&self) -> bool {
+        self.is_saving.load(atomic::Ordering::SeqCst)
+    }
+
     pub fn disk_usage_bytes(&self) -> u64 {
         self.buffer.disk_usage()
     }
 
-    /// Returns estimated memory usage by audio buffers in bytes
     pub fn memory_usage_bytes(&self) -> u64 {
         let mut total = 0u64;
 

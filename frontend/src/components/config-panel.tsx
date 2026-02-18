@@ -1,4 +1,4 @@
-import { Settings2, ChevronUp, Monitor, Timer, Sparkles, Folder, Mic, MousePointer2, Square } from 'lucide-react'
+import { Settings2, ChevronUp, Monitor, Timer, Sparkles, Folder, Mic, MousePointer2, Square, Film, Info, Settings, Volume2, RefreshCw } from 'lucide-react'
 import { Switch } from "@/components/ui/switch"
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -20,10 +20,17 @@ import {
     TabsList,
     TabsTrigger,
 } from "@/components/ui/tabs"
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { Slider } from "@/components/ui/slider"
 import { cn } from '@/lib/utils'
 import type { Config, DisplayInfo } from '@/lib/wails'
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 interface ConfigPanelProps {
     open: boolean
@@ -35,10 +42,11 @@ interface ConfigPanelProps {
     outputDevices: string[]
     disabled?: boolean
     onSelectDirectory: () => void
+    onRefreshDevices: () => void
 }
 
 // Standard FPS options
-const STANDARD_FPS = [60, 30, 24]
+const STANDARD_FPS = [60, 30]
 
 export function ConfigPanel({
     open,
@@ -49,7 +57,8 @@ export function ConfigPanel({
     inputDevices,
     outputDevices,
     disabled,
-    onSelectDirectory
+    onSelectDirectory,
+    onRefreshDevices
 }: ConfigPanelProps) {
     // Get current display's refresh rate
     const selectedDisplay = displays.find(d => d.index === config.displayIndex)
@@ -84,10 +93,26 @@ export function ConfigPanel({
                             <Settings2 className="w-4 h-4 text-muted-foreground" />
                             <span className="font-medium text-sm">Configuration</span>
                         </div>
-                        <ChevronUp className={cn(
-                            "w-4 h-4 text-muted-foreground/70 transition-transform duration-300",
-                            open ? "rotate-180" : "rotate-0"
-                        )} />
+                        <div className="flex items-center gap-2">
+                            {open && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        onRefreshDevices()
+                                    }}
+                                    disabled={disabled}
+                                >
+                                    <RefreshCw className="w-3.5 h-3.5" />
+                                </Button>
+                            )}
+                            <ChevronUp className={cn(
+                                "w-4 h-4 text-muted-foreground/70 transition-transform duration-300",
+                                open ? "rotate-180" : "rotate-0"
+                            )} />
+                        </div>
                     </Button>
                 </CollapsibleTrigger>
 
@@ -184,12 +209,50 @@ export function ConfigPanel({
                                             </div>
                                         </div>
 
+                                        {/* Segment Duration */}
+                                        <div className="space-y-1.5">
+                                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                                <Film className="w-3 h-3" /> Segment duration
+                                                <TooltipProvider delayDuration={200}>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Info className="w-3 h-3 text-muted-foreground/60 hover:text-muted-foreground cursor-help transition-colors" />
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="right" className="max-w-[200px] p-2">
+                                                            <div className="space-y-1 text-[10px] leading-relaxed normal-case">
+                                                                <p className="text-muted-foreground">
+                                                                    How long each video file lasts before rotating to next one.
+                                                                </p>
+                                                                <p className="text-muted-foreground">
+                                                                    Longer segments may lose up to that duration when saving since current segment isn't included.
+                                                                </p>
+                                                                <p className="text-primary text-[9px] pt-0.5">5s recommended</p>
+                                                            </div>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            </label>
+                                            <Select
+                                                value={config.segmentDurationSec.toString()}
+                                                onValueChange={(v) => setConfig(prev => ({ ...prev, segmentDurationSec: parseInt(v) }))}
+                                            >
+                                                <SelectTrigger className="h-9 bg-accent border-border/50">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="2">2 seconds</SelectItem>
+                                                    <SelectItem value="5">5 seconds (balanced)</SelectItem>
+                                                    <SelectItem value="10">10 seconds</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
                                         {/* Cursor & Border */}
-                                        <div className="space-y-2">
+                                        <div className="grid grid-cols-2 gap-4">
                                             <div className="flex items-center justify-between px-3 py-2 rounded-md border border-border/30 bg-secondary/5">
                                                 <div className="flex items-center gap-2">
                                                     <MousePointer2 className="w-3.5 h-3.5 text-muted-foreground" />
-                                                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Show Cursor</span>
+                                                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cursor</span>
                                                 </div>
                                                 <Switch
                                                     checked={config.showCursor}
@@ -202,7 +265,7 @@ export function ConfigPanel({
                                             <div className="flex items-center justify-between px-3 py-2 rounded-md border border-border/30 bg-secondary/5">
                                                 <div className="flex items-center gap-2">
                                                     <Square className="w-3.5 h-3.5 text-muted-foreground" />
-                                                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Show Border</span>
+                                                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Border</span>
                                                 </div>
                                                 <Switch
                                                     checked={config.showBorder}
@@ -226,16 +289,20 @@ export function ConfigPanel({
                                             devices={inputDevices}
                                             selectedIndex={config.microphoneDevice}
                                             onSelectDevice={(idx) => setConfig(prev => ({ ...prev, microphoneDevice: idx }))}
+                                            volume={config.microphoneVolume}
+                                            onVolumeChange={(vol) => setConfig(prev => ({ ...prev, microphoneVolume: vol }))}
                                             disabled={disabled}
                                         />
 
                                         {/* System Audio Selection */}
                                         <AudioDeviceSelector
-                                            label="System Audio"
+                                            label="System audio"
                                             icon={<Settings2 className="w-3 h-3" />}
                                             devices={outputDevices}
                                             selectedIndex={config.systemAudioDevice}
                                             onSelectDevice={(idx) => setConfig(prev => ({ ...prev, systemAudioDevice: idx }))}
+                                            volume={config.systemAudioVolume}
+                                            onVolumeChange={(vol) => setConfig(prev => ({ ...prev, systemAudioVolume: vol }))}
                                             disabled={disabled}
                                         />
                                     </div>
@@ -256,6 +323,8 @@ function AudioDeviceSelector({
     devices,
     selectedIndex,
     onSelectDevice,
+    volume,
+    onVolumeChange,
     disabled
 }: {
     label: string
@@ -263,30 +332,65 @@ function AudioDeviceSelector({
     devices: string[]
     selectedIndex: number
     onSelectDevice: (index: number) => void
+    volume: number
+    onVolumeChange: (volume: number) => void
     disabled?: boolean
 }) {
+    const [showVolume, setShowVolume] = useState(volume !== 100)
+    const isDeviceSelected = selectedIndex >= 0
+
     return (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
             <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                 {icon} {label}
             </label>
-            <Select
-                value={selectedIndex.toString()}
-                onValueChange={(v) => onSelectDevice(parseInt(v))}
-                disabled={disabled}
-            >
-                <SelectTrigger className="h-9 bg-accent border-border/50">
-                    <SelectValue placeholder={`No ${label}`} />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="-1">No {label}</SelectItem>
-                    {devices.map((d, idx) => (
-                        <SelectItem key={idx} value={idx.toString()}>
-                            {d}
-                        </SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
+            <div className="flex gap-2">
+                <Select
+                    value={selectedIndex.toString()}
+                    onValueChange={(v) => onSelectDevice(parseInt(v))}
+                    disabled={disabled}
+                >
+                    <SelectTrigger className="h-9 bg-accent border-border/50 flex-1">
+                        <SelectValue placeholder={`No ${label}`} />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="-1">No {label}</SelectItem>
+                        {devices.map((d, idx) => (
+                            <SelectItem key={idx} value={idx.toString()}>
+                                {d}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                {isDeviceSelected && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 w-9 p-0 text-muted-foreground hover:text-foreground"
+                        onClick={() => setShowVolume(!showVolume)}
+                        disabled={disabled}
+                    >
+                        <Settings className="w-4 h-4" />
+                    </Button>
+                )}
+            </div>
+            {isDeviceSelected && showVolume && (
+                <div className="pt-2 pb-2">
+                    <div className="flex items-center gap-3">
+                        <Volume2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                        <Slider
+                            value={[volume]}
+                            onValueChange={(vals) => onVolumeChange(vals[0])}
+                            min={0}
+                            max={200}
+                            step={5}
+                            disabled={disabled}
+                            className="flex-1"
+                        />
+                        <span className="text-xs font-mono text-muted-foreground w-10 text-right">{volume}%</span>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

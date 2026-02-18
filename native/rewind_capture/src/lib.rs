@@ -227,11 +227,25 @@ pub extern "C" fn rewind_stop(handle: *mut c_void) {
         log::warn!("Stop called with null handle");
         return;
     }
+    
+    // Check if saving is in progress
+    let handle_ref = unsafe { &*(handle as *mut ReplayBufferHandle) };
+    if handle_ref.is_saving() {
+        log::warn!("Cannot stop while save operation is in progress");
+        return;
+    }
+    
     log::info!("Stopping replay buffer");
-    let handle_box: Box<ReplayBufferHandle> =
-        unsafe { Box::from_raw(handle as *mut ReplayBufferHandle) };
-    handle_box.stop();
-    log::info!("Replay buffer stopped");
+    
+    // Set stop signal
+    handle_ref.stop();
+    
+    // Free the handle
+    unsafe {
+        let _handle_box: Box<ReplayBufferHandle> = Box::from_raw(handle as *mut ReplayBufferHandle);
+    }
+    
+    log::info!("Replay buffer stopped and freed");
 }
 
 #[derive(Serialize)]
@@ -275,6 +289,45 @@ pub extern "C" fn rewind_get_status(handle: *mut c_void) -> *mut c_char {
             success: true,
             data: Some(status),
             error: None,
+        }
+    };
+
+    let json = serde_json::to_string(&result).unwrap_or_default();
+    CString::new(json).unwrap().into_raw()
+}
+
+#[derive(Serialize)]
+struct ClearResult {
+    success: bool,
+    error: Option<String>,
+}
+
+#[no_mangle]
+pub extern "C" fn rewind_clear(handle: *mut c_void) -> *mut c_char {
+    let result = if handle.is_null() {
+        ClearResult {
+            success: false,
+            error: Some("Invalid handle".to_string()),
+        }
+    } else {
+        let handle = unsafe { &*(handle as *mut ReplayBufferHandle) };
+        
+        match handle.clear() {
+            Ok(_) => {
+                log::info!("Segments cleared successfully");
+                ClearResult {
+                    success: true,
+                    error: None,
+                }
+            }
+            Err(e) => {
+                let error_msg = e.to_string();
+                log::error!("Failed to clear segments: {}", error_msg);
+                ClearResult {
+                    success: false,
+                    error: Some(error_msg),
+                }
+            }
         }
     };
 

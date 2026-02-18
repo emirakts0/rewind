@@ -7,11 +7,9 @@ import (
 	"log/slog"
 	"net/http"
 	_ "net/http/pprof"
-	"os"
-	"path/filepath"
-	"rewind/internal/utils"
 
 	"rewind/internal/app"
+	"rewind/internal/utils"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -26,34 +24,6 @@ var appIcon []byte
 //go:embed build/assets/icon-recording.png
 var appIconRecording []byte
 
-func getFFmpegPath() string {
-	exePath, err := os.Executable()
-	if err == nil {
-		exeDir := filepath.Dir(exePath)
-		ffmpegPath := filepath.Join(exeDir, "ffmpeg.exe")
-		if _, err := os.Stat(ffmpegPath); err == nil {
-			return ffmpegPath
-		}
-
-		ffmpegPath = filepath.Join(exeDir, "bin", "ffmpeg.exe")
-		if _, err := os.Stat(ffmpegPath); err == nil {
-			return ffmpegPath
-		}
-	}
-
-	// Fallback: check working directory
-	if _, err := os.Stat("bin/ffmpeg.exe"); err == nil {
-		return "bin/ffmpeg.exe"
-	}
-	if _, err := os.Stat("ffmpeg.exe"); err == nil {
-		return "ffmpeg.exe"
-	}
-
-	// Last resort: hope it's in PATH
-	return "ffmpeg"
-}
-
-// TrayManager handles system tray functionality
 type TrayManager struct {
 	app       *application.App
 	systray   *application.SystemTray
@@ -81,7 +51,6 @@ func (t *TrayManager) Setup() {
 
 	t.createMenu()
 
-	// Left click - toggle window
 	t.systray.OnClick(func() {
 		if t.window.IsVisible() {
 			t.window.Hide()
@@ -92,7 +61,6 @@ func (t *TrayManager) Setup() {
 		t.UpdateShowHideLabel()
 	})
 
-	// Right click - show menu
 	t.systray.OnRightClick(func() {
 		t.UpdateShowHideLabel()
 		t.systray.OpenMenu()
@@ -102,35 +70,42 @@ func (t *TrayManager) Setup() {
 func (t *TrayManager) createMenu() {
 	t.menu = t.app.NewMenu()
 
-	// Status item (disabled, shows current state)
 	t.statusItem = t.menu.Add("● Ready")
 	t.statusItem.SetEnabled(false)
 
 	t.menu.AddSeparator()
 
-	// Start/Stop Recording
 	t.startStopItem = t.menu.Add("Start Recording")
 	t.startStopItem.OnClick(func(ctx *application.Context) {
+		state := t.rewindApp.GetRecordingState()
+
+		if state.Status == app.StatusSaving {
+			slog.Warn("Cannot start/stop while saving")
+			return
+		}
+
 		if t.rewindApp.IsRecording() {
-			t.rewindApp.StopRecording()
+			if err := t.rewindApp.StopRecording(); err != nil {
+				slog.Error("Failed to stop recording", "error", err)
+			}
 		} else {
-			t.rewindApp.StartRecording()
+			if err := t.rewindApp.StartRecording(); err != nil {
+				slog.Error("Failed to start recording", "error", err)
+			}
 		}
 		t.UpdateState()
 	})
 
-	// Save Clip
 	t.saveItem = t.menu.Add("Save Clip")
 	t.saveItem.SetEnabled(false)
 	t.saveItem.OnClick(func(ctx *application.Context) {
-		if t.rewindApp.IsRecording() {
-			t.rewindApp.SaveCurrentClip()
+		if _, err := t.rewindApp.SaveCurrentClip(); err != nil {
+			slog.Error("Failed to save clip", "error", err)
 		}
 	})
 
 	t.menu.AddSeparator()
 
-	// Show/Hide Window
 	t.showHideItem = t.menu.Add("Show Window")
 	t.showHideItem.OnClick(func(ctx *application.Context) {
 		if t.window.IsVisible() {
@@ -142,7 +117,6 @@ func (t *TrayManager) createMenu() {
 		t.UpdateShowHideLabel()
 	})
 
-	// Reload UI
 	reloadItem := t.menu.Add("Reload UI")
 	reloadItem.OnClick(func(ctx *application.Context) {
 		t.window.Reload()
@@ -151,7 +125,6 @@ func (t *TrayManager) createMenu() {
 
 	t.menu.AddSeparator()
 
-	// Quit
 	quitItem := t.menu.Add("Quit Rewind")
 	quitItem.OnClick(func(ctx *application.Context) {
 		if t.rewindApp.IsRecording() {
@@ -164,18 +137,28 @@ func (t *TrayManager) createMenu() {
 }
 
 func (t *TrayManager) UpdateState() {
-	isRecording := t.rewindApp.IsRecording()
-	slog.Info("updating tray state", "recording", isRecording)
+	state := t.rewindApp.GetRecordingState()
+	isRecording := state.Status == app.StatusRecording
+	isSaving := state.Status == app.StatusSaving
 
-	if isRecording {
+	slog.Info("updating tray state", "recording", isRecording, "saving", isSaving)
+
+	if isSaving {
+		t.systray.SetIcon(appIconRecording)
+		t.statusItem.SetLabel("● Saving...")
+		t.startStopItem.SetEnabled(false)
+		t.saveItem.SetEnabled(false)
+	} else if isRecording {
 		t.systray.SetIcon(appIconRecording)
 		t.statusItem.SetLabel("● Recording")
 		t.startStopItem.SetLabel("Stop Recording")
+		t.startStopItem.SetEnabled(true)
 		t.saveItem.SetEnabled(true)
 	} else {
 		t.systray.SetIcon(appIcon)
 		t.statusItem.SetLabel("● Ready")
 		t.startStopItem.SetLabel("Start Recording")
+		t.startStopItem.SetEnabled(true)
 		t.saveItem.SetEnabled(false)
 	}
 
@@ -199,7 +182,7 @@ func main() {
 	}
 	defer utils.Close()
 
-	ffmpegPath := getFFmpegPath()
+	ffmpegPath := utils.GetFFmpegPath()
 	slog.Info("Using FFmpeg", "path", ffmpegPath)
 
 	// Start pprof server
@@ -254,17 +237,14 @@ func main() {
 	})
 	mainWindow = window
 
-	// Hide to tray instead of closing
 	window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 		window.Hide()
-		e.Cancel() // Prevent actual close
+		e.Cancel()
 	})
 
-	// Setup system tray
 	trayManager := NewTrayManager(appInstance, rewindApp, window)
 	trayManager.Setup()
 
-	// Hook to update tray menu when window is hidden via close button
 	window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 		trayManager.UpdateShowHideLabel()
 	})
@@ -274,22 +254,30 @@ func main() {
 		trayManager.UpdateState()
 	})
 
-	// Global Hotkeys (works system-wide)
 	hkManager := utils.NewHotkeyManager()
 
-	// Start/Stop: Ctrl+F9
 	hkManager.Register(1, func() {
+		state := rewindApp.GetRecordingState()
+
+		if state.Status == app.StatusSaving {
+			slog.Warn("Cannot start/stop while saving")
+			return
+		}
+
 		if rewindApp.IsRecording() {
-			rewindApp.StopRecording()
+			if err := rewindApp.StopRecording(); err != nil {
+				slog.Error("Failed to stop recording via hotkey", "error", err)
+			}
 		} else {
-			rewindApp.StartRecording()
+			if err := rewindApp.StartRecording(); err != nil {
+				slog.Error("Failed to start recording via hotkey", "error", err)
+			}
 		}
 	})
 
-	// Save Clip: Ctrl+F10
 	hkManager.Register(2, func() {
-		if rewindApp.IsRecording() {
-			rewindApp.SaveCurrentClip()
+		if _, err := rewindApp.SaveCurrentClip(); err != nil {
+			slog.Error("Failed to save clip via hotkey", "error", err)
 		}
 	})
 

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"rewind/internal/native"
+	"rewind/internal/utils"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -22,19 +23,22 @@ type Status string
 const (
 	StatusIdle      Status = "idle"
 	StatusRecording Status = "recording"
+	StatusSaving    Status = "saving"
 )
 
-// Config represents user-configurable settings
 type Config struct {
-	DisplayIndex      int    `json:"displayIndex"`
-	FPS               int    `json:"fps"`
-	Bitrate           int    `json:"bitrate"` // in Mbps
-	RecordSeconds     int    `json:"recordSeconds"`
-	OutputDir         string `json:"outputDir"`
-	MicrophoneDevice  int    `json:"microphoneDevice"`  // device index, -1 = disabled
-	SystemAudioDevice int    `json:"systemAudioDevice"` // device index, -1 = disabled
-	ShowCursor        bool   `json:"showCursor"`
-	ShowBorder        bool   `json:"showBorder"`
+	DisplayIndex       int    `json:"displayIndex"`
+	FPS                int    `json:"fps"`
+	Bitrate            int    `json:"bitrate"`
+	RecordSeconds      int    `json:"recordSeconds"`
+	SegmentDurationSec int    `json:"segmentDurationSec"`
+	OutputDir          string `json:"outputDir"`
+	MicrophoneDevice   int    `json:"microphoneDevice"`
+	SystemAudioDevice  int    `json:"systemAudioDevice"`
+	MicrophoneVolume   int    `json:"microphoneVolume"`
+	SystemAudioVolume  int    `json:"systemAudioVolume"`
+	ShowCursor         bool   `json:"showCursor"`
+	ShowBorder         bool   `json:"showBorder"`
 }
 
 // MemoryEstimate holds estimated memory usage
@@ -61,24 +65,25 @@ func (c *Config) EstimateMemoryUsage() MemoryEstimate {
 	}
 }
 
-// DefaultConfig returns sensible defaults
 func DefaultConfig() Config {
-	// Default to %LOCALAPPDATA%\Rewind\clips on Windows
 	outputDir := "./clips"
-	if cacheDir, err := os.UserCacheDir(); err == nil {
-		outputDir = filepath.Join(cacheDir, "Rewind", "clips")
+	if dir, err := utils.GetClipsDir(); err == nil {
+		outputDir = dir
 	}
 
 	return Config{
-		DisplayIndex:      0,
-		FPS:               30,
-		Bitrate:           15, // 15 Mbps
-		RecordSeconds:     30,
-		OutputDir:         outputDir,
-		MicrophoneDevice:  -1,
-		SystemAudioDevice: -1,
-		ShowCursor:        true,
-		ShowBorder:        false,
+		DisplayIndex:       0,
+		FPS:                30,
+		Bitrate:            15,
+		RecordSeconds:      30,
+		SegmentDurationSec: 5,
+		OutputDir:          outputDir,
+		MicrophoneDevice:   -1,
+		SystemAudioDevice:  -1,
+		MicrophoneVolume:   100,
+		SystemAudioVolume:  100,
+		ShowCursor:         true,
+		ShowBorder:         false,
 	}
 }
 
@@ -139,10 +144,14 @@ func (a *App) SetOnStateChange(callback func(State)) {
 	a.onTrayStateChange = callback
 }
 
-// ServiceStartup is called when the Wails v3 app starts
 func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	a.ctx = ctx
 	slog.Info("Rewind service starting up...")
+
+	if err := utils.CleanupTempSegments(); err != nil {
+		slog.Warn("failed to cleanup temp segments on startup", "error", err)
+	}
+
 	return nil
 }
 
@@ -220,7 +229,6 @@ func (a *App) GetConfig() Config {
 	return a.config
 }
 
-// UpdateConfig updates the application configuration (only when not recording)
 func (a *App) UpdateConfig(cfg Config) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -234,6 +242,9 @@ func (a *App) UpdateConfig(cfg Config) error {
 	}
 	if cfg.RecordSeconds <= 0 {
 		return fmt.Errorf("record seconds must be positive")
+	}
+	if cfg.SegmentDurationSec != 2 && cfg.SegmentDurationSec != 5 && cfg.SegmentDurationSec != 10 {
+		return fmt.Errorf("segment duration must be 2, 5, or 10 seconds")
 	}
 
 	a.config = cfg
@@ -280,6 +291,10 @@ func (a *App) StartRecording() error {
 		return fmt.Errorf("already recording")
 	}
 
+	if a.state.Status == StatusSaving {
+		return fmt.Errorf("cannot start while saving a clip")
+	}
+
 	// Get monitor info
 	monitors, err := native.GetMonitors()
 	if err != nil {
@@ -298,7 +313,21 @@ func (a *App) StartRecording() error {
 		micIdx = &a.config.MicrophoneDevice
 	}
 	if a.config.SystemAudioDevice >= 0 {
-		speakerIdx = &a.config.SystemAudioDevice
+		// they are indexed after all input devices so we need to add the number of input devices to the index
+		inputDevices, err := native.ListAudioDevices()
+		if err != nil {
+			return fmt.Errorf("failed to list audio devices: %w", err)
+		}
+
+		inputCount := 0
+		for _, d := range inputDevices {
+			if d.IsInput {
+				inputCount++
+			}
+		}
+
+		adjustedIdx := inputCount + a.config.SystemAudioDevice
+		speakerIdx = &adjustedIdx
 	}
 
 	audioConfig := native.AudioConfig{
@@ -306,31 +335,36 @@ func (a *App) StartRecording() error {
 		Channels:           2,
 		MicEnabled:         micIdx != nil,
 		MicDeviceIndex:     micIdx,
+		MicVolume:          float32(a.config.MicrophoneVolume) / 100.0,
 		SpeakerEnabled:     speakerIdx != nil,
 		SpeakerDeviceIndex: speakerIdx,
+		SpeakerVolume:      float32(a.config.SystemAudioVolume) / 100.0,
 	}
 
-	// Rust handles directory creation
-	tempDir := filepath.Join(a.config.OutputDir, ".temp")
+	tempDir, err := utils.GetTempSegmentsDir()
+	if err != nil {
+		return fmt.Errorf("failed to get temp directory: %w", err)
+	}
 
-	// Build replay config
+	actualBufferDuration := uint64(a.config.RecordSeconds + a.config.SegmentDurationSec)
+
 	config := native.ReplayRecordingConfig{
 		Width:               monitor.Width,
 		Height:              monitor.Height,
 		Fps:                 uint32(a.config.FPS),
-		VideoBitrate:        uint32(a.config.Bitrate * 1000000), // Mbps to bps
+		VideoBitrate:        uint32(a.config.Bitrate * 1000000),
 		Audio:               audioConfig,
-		BufferDurationSecs:  uint64(a.config.RecordSeconds),
-		SegmentDurationSecs: 5,
+		BufferDurationSecs:  actualBufferDuration,
+		SegmentDurationSecs: uint64(a.config.SegmentDurationSec),
 		ShowCursor:          a.config.ShowCursor,
 		ShowBorder:          a.config.ShowBorder,
 		FfmpegPath:          a.ffmpegPath,
 		TempPath:            tempDir,
 	}
 
-	// Initialize replay buffer
 	handle, err := native.InitReplayBuffer(a.config.DisplayIndex, config)
 	if err != nil {
+		a.setState(StatusIdle, "")
 		return fmt.Errorf("failed to start replay buffer: %w", err)
 	}
 
@@ -338,7 +372,6 @@ func (a *App) StartRecording() error {
 	a.startTime = time.Now()
 	a.setState(StatusRecording, "")
 
-	// Start background goroutine to update buffer status
 	go a.updateBufferStatus()
 
 	slog.Info("recording started",
@@ -351,13 +384,16 @@ func (a *App) StartRecording() error {
 	return nil
 }
 
-// StopRecording stops the current recording session
 func (a *App) StopRecording() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
 	if a.state.Status != StatusRecording {
 		return fmt.Errorf("not recording")
+	}
+
+	if a.state.Status == StatusSaving {
+		return fmt.Errorf("cannot stop while saving a clip")
 	}
 
 	if a.replayHandle != 0 {
@@ -373,30 +409,54 @@ func (a *App) StopRecording() error {
 // SaveCurrentClip saves the replay buffer to a file
 func (a *App) SaveCurrentClip() (string, error) {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 
 	if a.state.Status != StatusRecording {
+		a.mu.Unlock()
 		return "", fmt.Errorf("not recording")
+	}
+
+	if a.state.Status == StatusSaving {
+		a.mu.Unlock()
+		return "", fmt.Errorf("save already in progress")
 	}
 
 	// Debounce: 5 second cooldown between saves
 	if time.Since(a.lastSaveTime) < 5*time.Second {
 		remaining := 5 - int(time.Since(a.lastSaveTime).Seconds())
+		a.mu.Unlock()
 		return "", fmt.Errorf("please wait %d seconds before saving another clip", remaining)
 	}
 
 	if a.replayHandle == 0 {
+		a.mu.Unlock()
 		return "", fmt.Errorf("replay buffer not initialized")
 	}
 
-	filename := fmt.Sprintf("clip_%s.mp4", time.Now().Format("20060102_150405"))
-	outputPath := filepath.Join(a.config.OutputDir, filename)
+	previousStatus := a.state.Status
+	a.state.Status = StatusSaving
+	a.emitStateChange()
 
-	if err := a.replayHandle.Save(outputPath); err != nil {
+	handle := a.replayHandle
+	outputDir := a.config.OutputDir
+	a.mu.Unlock()
+
+	filename := fmt.Sprintf("clip_%s.mp4", time.Now().Format("20060102_150405"))
+	outputPath := filepath.Join(outputDir, filename)
+
+	err := handle.Save(outputPath)
+
+	a.mu.Lock()
+	a.state.Status = previousStatus
+	if err == nil {
+		a.lastSaveTime = time.Now()
+	}
+	a.emitStateChange()
+	a.mu.Unlock()
+
+	if err != nil {
 		return "", err
 	}
 
-	a.lastSaveTime = time.Now()
 	a.emitClipsUpdated()
 
 	slog.Info("clip saved", "filename", filename)
@@ -481,6 +541,10 @@ func (a *App) setState(status Status, errorMsg string) {
 	a.state.ErrorMessage = errorMsg
 	a.state.Estimate = a.config.EstimateMemoryUsage()
 
+	a.emitStateChange()
+}
+
+func (a *App) emitStateChange() {
 	// Notify frontend
 	if a.app != nil {
 		a.app.Event.Emit("state-changed", a.state)
@@ -543,18 +607,15 @@ func (a *App) updateBufferStatus() {
 	}
 }
 
-// handleRuntimeError handles runtime errors/warnings from Rust during recording
 func (a *App) handleRuntimeError(level string, message string) {
 	a.mu.RLock()
 	isRecording := a.state.Status == StatusRecording
 	a.mu.RUnlock()
 
-	// Only handle errors during recording
 	if !isRecording {
 		return
 	}
 
-	// Emit runtime error event to frontend
 	if a.app != nil {
 		a.app.Event.Emit("runtime-error", map[string]string{
 			"level":   level,
@@ -562,18 +623,19 @@ func (a *App) handleRuntimeError(level string, message string) {
 		})
 	}
 
-	// If it's a critical error, stop recording
 	if level == "error" {
-		// Check for critical errors that should stop recording
 		criticalKeywords := []string{
+			"Replay buffer error",
 			"Failed to send frame",
 			"encoder",
 			"capture",
 			"monitor",
+			"IoError",
+			"WindowsError",
 		}
 
 		for _, keyword := range criticalKeywords {
-			if strings.Contains(strings.ToLower(message), strings.ToLower(keyword)) {
+			if strings.Contains(message, keyword) {
 				slog.Error("critical error detected, stopping recording", "message", message)
 				go func() {
 					time.Sleep(100 * time.Millisecond)

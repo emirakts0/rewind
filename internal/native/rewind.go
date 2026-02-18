@@ -18,6 +18,7 @@ var (
 	procInit             *syscall.LazyProc
 	procSave             *syscall.LazyProc
 	procStop             *syscall.LazyProc
+	procClear            *syscall.LazyProc
 	procFreeString       *syscall.LazyProc
 	procGetStatus        *syscall.LazyProc
 	procSetLogCallback   *syscall.LazyProc
@@ -38,6 +39,7 @@ func Load(path string) {
 	procInit = mod.NewProc("rewind_init")
 	procSave = mod.NewProc("rewind_save")
 	procStop = mod.NewProc("rewind_stop")
+	procClear = mod.NewProc("rewind_clear")
 	procFreeString = mod.NewProc("rewind_free_string")
 	procGetStatus = mod.NewProc("rewind_get_status")
 	procSetLogCallback = mod.NewProc("rewind_set_log_callback")
@@ -103,12 +105,14 @@ type AudioDeviceInfo struct {
 }
 
 type AudioConfig struct {
-	SampleRate         uint32 `json:"sample_rate"`
-	Channels           uint16 `json:"channels"`
-	MicEnabled         bool   `json:"mic_enabled"`
-	MicDeviceIndex     *int   `json:"mic_device_index"`
-	SpeakerEnabled     bool   `json:"speaker_enabled"`
-	SpeakerDeviceIndex *int   `json:"speaker_device_index"`
+	SampleRate         uint32  `json:"sample_rate"`
+	Channels           uint16  `json:"channels"`
+	MicEnabled         bool    `json:"mic_enabled"`
+	MicDeviceIndex     *int    `json:"mic_device_index"`
+	MicVolume          float32 `json:"mic_volume"`
+	SpeakerEnabled     bool    `json:"speaker_enabled"`
+	SpeakerDeviceIndex *int    `json:"speaker_device_index"`
+	SpeakerVolume      float32 `json:"speaker_volume"`
 }
 
 type ReplayRecordingConfig struct {
@@ -309,6 +313,34 @@ func (h Handle) Save(path string) error {
 
 func (h Handle) Stop() {
 	procStop.Call(uintptr(h))
+}
+
+type ClearResult struct {
+	Success bool    `json:"success"`
+	Error   *string `json:"error"`
+}
+
+func (h Handle) Clear() error {
+	ptr, _, _ := procClear.Call(uintptr(h))
+	if ptr == 0 {
+		return fmt.Errorf("failed to clear segments: no response from native library")
+	}
+	defer procFreeString.Call(ptr)
+
+	jsonStr := ptrToString(ptr)
+	var result ClearResult
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		return fmt.Errorf("failed to parse clear result: %v", err)
+	}
+
+	if !result.Success {
+		if result.Error != nil {
+			return fmt.Errorf(*result.Error)
+		}
+		return fmt.Errorf("failed to clear segments: unknown error")
+	}
+
+	return nil
 }
 
 type StatusResult struct {

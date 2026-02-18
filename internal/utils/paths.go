@@ -59,3 +59,73 @@ func ResolveAndValidatePath(path string, baseDir string) (string, error) {
 
 	return absPath, nil
 }
+
+func GetTempSegmentsDir() (string, error) {
+	tempDir := os.TempDir()
+	segmentsDir := filepath.Join(tempDir, AppName, "segments")
+	if err := os.MkdirAll(segmentsDir, 0755); err != nil {
+		return "", err
+	}
+	return segmentsDir, nil
+}
+
+func GetFFmpegPath() string {
+	exePath, err := os.Executable()
+	if err == nil {
+		exeDir := filepath.Dir(exePath)
+
+		ffmpegPath := filepath.Join(exeDir, "ffmpeg.exe")
+		if _, err := os.Stat(ffmpegPath); err == nil {
+			return ffmpegPath
+		}
+
+		ffmpegPath = filepath.Join(exeDir, "bin", "ffmpeg.exe")
+		if _, err := os.Stat(ffmpegPath); err == nil {
+			return ffmpegPath
+		}
+	}
+
+	if _, err := os.Stat("bin/ffmpeg.exe"); err == nil {
+		return "bin/ffmpeg.exe"
+	}
+	if _, err := os.Stat("ffmpeg.exe"); err == nil {
+		return "ffmpeg.exe"
+	}
+
+	return "ffmpeg"
+}
+
+func CleanupTempSegments() error {
+	tempDir, err := GetTempSegmentsDir()
+	if err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
+		return nil
+	}
+
+	entries, err := os.ReadDir(tempDir)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			subDir := filepath.Join(tempDir, entry.Name())
+			if err := os.RemoveAll(subDir); err != nil {
+				return err
+			}
+		} else {
+			ext := filepath.Ext(entry.Name())
+			if ext == ".mp4" || ext == ".ts" || ext == ".txt" || ext == ".pcm" {
+				filePath := filepath.Join(tempDir, entry.Name())
+				if err := os.Remove(filePath); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
+}

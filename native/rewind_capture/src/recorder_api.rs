@@ -34,8 +34,10 @@ pub struct AudioConfig {
     pub channels: u16,
     pub mic_enabled: bool,
     pub mic_device_index: Option<usize>,
+    pub mic_volume: f32,
     pub speaker_enabled: bool,
     pub speaker_device_index: Option<usize>,
+    pub speaker_volume: f32,
 }
 
 impl Default for AudioConfig {
@@ -45,8 +47,10 @@ impl Default for AudioConfig {
             channels: 2,
             mic_enabled: false,
             mic_device_index: None,
+            mic_volume: 1.0,
             speaker_enabled: false,
             speaker_device_index: None,
+            speaker_volume: 1.0,
         }
     }
 }
@@ -128,6 +132,7 @@ pub fn start_replay_buffer(
     if let Ok(mut h) = handle.lock() {
         h.set_audio_buffers(mic_audio_buffer.clone(), speaker_audio_buffer.clone());
         h.set_audio_format(config.audio.sample_rate, config.audio.channels);
+        h.set_audio_volumes(config.audio.mic_volume, config.audio.speaker_volume);
     }
 
     log::info!("Replay buffer active");

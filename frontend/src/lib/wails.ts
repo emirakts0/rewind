@@ -10,11 +10,14 @@ export interface DisplayInfo {
 export interface Config {
     displayIndex: number
     fps: number
-    bitrate: number // Mbps
+    bitrate: number
     recordSeconds: number
+    segmentDurationSec: number
     outputDir: string
-    microphoneDevice: number // device index, -1 = disabled
-    systemAudioDevice: number // device index, -1 = disabled
+    microphoneDevice: number
+    systemAudioDevice: number
+    microphoneVolume: number
+    systemAudioVolume: number
     showCursor: boolean
     showBorder: boolean
 }
