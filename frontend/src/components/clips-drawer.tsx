@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from "framer-motion"
-import { FolderOpen, FileVideo, Clock, RefreshCcw, ArrowLeft, ExternalLink, Trash2, CheckCircle2, Circle } from 'lucide-react'
+import { FolderOpen, FileVideo, Clock, RefreshCcw, ArrowLeft, ExternalLink, Trash2, CheckCircle2, Circle, CheckSquare, Square } from 'lucide-react'
 import { api, type Clip } from '@/lib/wails'
 import { cn, formatBytes } from '@/lib/utils'
 
@@ -124,6 +124,14 @@ export function ClipsDrawer() {
         setSelectedClips(new Set())
     }
 
+    const selectAll = () => {
+        setSelectedClips(new Set(clips.map(clip => clip.path)))
+    }
+
+    const deselectAll = () => {
+        setSelectedClips(new Set())
+    }
+
     return (
         <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
@@ -148,11 +156,6 @@ export function ClipsDrawer() {
                             <ArrowLeft className="h-4 w-4" />
                         </Button>
                         <span>Library</span>
-                        {selectionMode && (
-                            <span className="text-xs text-muted-foreground font-normal">
-                                {selectedClips.size} selected
-                            </span>
-                        )}
                         <div className="ml-auto flex items-center gap-1">
                             {selectionMode ? (
                                 <>
@@ -225,9 +228,32 @@ export function ClipsDrawer() {
                             <p className="text-sm font-medium">No clips found</p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 px-4 pt-3 pb-4">
-                            <AnimatePresence mode="popLayout" initial={false}>
-                                {clips.map((clip) => {
+                        <div className="px-4 pt-3 pb-4">
+                            {selectionMode && (
+                                <div className="flex items-center justify-between px-3 py-3 mb-2">
+                                    <span className="text-sm text-muted-foreground">
+                                        {selectedClips.size} selected
+                                    </span>
+                                    <button
+                                        onClick={selectedClips.size === clips.length ? deselectAll : selectAll}
+                                        className="flex items-center gap-2 transition-colors hover:opacity-80"
+                                    >
+                                        <span className="text-sm text-muted-foreground">
+                                            {selectedClips.size === clips.length ? 'Deselect All' : 'Select All'}
+                                        </span>
+                                        <div className="flex items-center justify-center">
+                                            {selectedClips.size === clips.length ? (
+                                                <CheckCircle2 className="h-5 w-5 text-primary" />
+                                            ) : (
+                                                <Circle className="h-5 w-5 text-muted-foreground/50" />
+                                            )}
+                                        </div>
+                                    </button>
+                                </div>
+                            )}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                                <AnimatePresence mode="popLayout" initial={false}>
+                                    {clips.map((clip) => {
                                     const isSelected = selectedClips.has(clip.path)
                                     return (
                                         <motion.button
@@ -278,6 +304,7 @@ export function ClipsDrawer() {
                                     )
                                 })}
                             </AnimatePresence>
+                            </div>
                         </div>
                     )}
                 </ScrollArea>
