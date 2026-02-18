@@ -92,7 +92,7 @@ struct InitResult {
 }
 
 #[no_mangle]
-pub extern "C" fn rewind_init(monitor_index: u32, config_json: *const c_char) -> *mut c_char {
+pub extern "C" fn rewind_init(_monitor_index: u32, config_json: *const c_char) -> *mut c_char {
     let result = if config_json.is_null() {
         log::error!("Config JSON is null");
         InitResult {
@@ -136,8 +136,8 @@ pub extern "C" fn rewind_init(monitor_index: u32, config_json: *const c_char) ->
             }
         };
 
-        log::info!("Initializing replay buffer for monitor {}", monitor_index);
-        match start_replay_buffer(monitor_index as usize, config) {
+        log::info!("Initializing replay buffer for monitor {}", config.monitor_index);
+        match start_replay_buffer(config.monitor_index, config) {
             Ok(handle) => {
                 log::info!("Replay buffer started successfully");
                 let handle_ptr = Box::into_raw(Box::new(handle)) as usize;

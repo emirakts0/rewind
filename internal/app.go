@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -116,6 +114,34 @@ func (a *App) SetOnStateChange(callback func(State)) {
 	a.onTrayStateChange = callback
 }
 
+// calculateAudioDeviceIndices computes the correct audio device indices
+func (a *App) calculateAudioDeviceIndices() (*int, *int, error) {
+	var micIdx, speakerIdx *int
+
+	if a.config.MicrophoneDevice >= 0 {
+		micIdx = &a.config.MicrophoneDevice
+	}
+
+	if a.config.SystemAudioDevice >= 0 {
+		inputDevices, err := ListAudioDevices()
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to list audio devices: %w", err)
+		}
+
+		inputCount := 0
+		for _, d := range inputDevices {
+			if d.IsInput {
+				inputCount++
+			}
+		}
+
+		adjustedIdx := inputCount + a.config.SystemAudioDevice
+		speakerIdx = &adjustedIdx
+	}
+
+	return micIdx, speakerIdx, nil
+}
+
 func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	a.ctx = ctx
 	slog.Info("Rewind service starting up...")
@@ -209,8 +235,9 @@ func (a *App) UpdateConfig(cfg Config) error {
 		return fmt.Errorf("cannot change config while recording")
 	}
 
-	if cfg.FPS <= 0 || cfg.FPS > 240 {
-		return fmt.Errorf("FPS must be between 1 and 240")
+	// Validate configuration
+	if cfg.FPS <= 0 || cfg.FPS > MaxFPS {
+		return fmt.Errorf("FPS must be between 1 and %d", MaxFPS)
 	}
 	if cfg.RecordSeconds <= 0 {
 		return fmt.Errorf("record seconds must be positive")
@@ -249,50 +276,10 @@ func (a *App) StartRecording() error {
 		return fmt.Errorf("cannot start while saving a clip")
 	}
 
-	// Get monitor info
-	monitors, err := GetMonitors()
+	// Calculate audio device indices
+	micIdx, speakerIdx, err := a.calculateAudioDeviceIndices()
 	if err != nil {
-		return fmt.Errorf("failed to get monitors: %w", err)
-	}
-
-	if a.config.DisplayIndex >= len(monitors) {
-		return fmt.Errorf("invalid display index: %d", a.config.DisplayIndex)
-	}
-
-	monitor := monitors[a.config.DisplayIndex]
-
-	// Build audio config
-	var micIdx, speakerIdx *int
-	if a.config.MicrophoneDevice >= 0 {
-		micIdx = &a.config.MicrophoneDevice
-	}
-	if a.config.SystemAudioDevice >= 0 {
-		// they are indexed after all input devices so we need to add the number of input devices to the index
-		inputDevices, err := ListAudioDevices()
-		if err != nil {
-			return fmt.Errorf("failed to list audio devices: %w", err)
-		}
-
-		inputCount := 0
-		for _, d := range inputDevices {
-			if d.IsInput {
-				inputCount++
-			}
-		}
-
-		adjustedIdx := inputCount + a.config.SystemAudioDevice
-		speakerIdx = &adjustedIdx
-	}
-
-	audioConfig := AudioConfig{
-		SampleRate:         48000,
-		Channels:           2,
-		MicEnabled:         micIdx != nil,
-		MicDeviceIndex:     micIdx,
-		MicVolume:          float32(a.config.MicrophoneVolume) / 100.0,
-		SpeakerEnabled:     speakerIdx != nil,
-		SpeakerDeviceIndex: speakerIdx,
-		SpeakerVolume:      float32(a.config.SystemAudioVolume) / 100.0,
+		return err
 	}
 
 	tempDir, err := GetTempSegmentsDir()
@@ -300,15 +287,28 @@ func (a *App) StartRecording() error {
 		return fmt.Errorf("failed to get temp directory: %w", err)
 	}
 
-	actualBufferDuration := uint64(a.config.RecordSeconds + a.config.SegmentDurationSec)
+	// Get monitor info
+	monitors, err := GetMonitors()
+	if err != nil {
+		return fmt.Errorf("failed to get monitors: %w", err)
+	}
+	monitor := monitors[a.config.DisplayIndex]
 
 	config := ReplayRecordingConfig{
-		Width:               monitor.Width,
-		Height:              monitor.Height,
-		Fps:                 uint32(a.config.FPS),
-		VideoBitrate:        uint32(a.config.Bitrate * 1000000),
-		Audio:               audioConfig,
-		BufferDurationSecs:  actualBufferDuration,
+		MonitorIndex: a.config.DisplayIndex,
+		Width:        monitor.Width,
+		Height:       monitor.Height,
+		Fps:          uint32(a.config.FPS),
+		VideoBitrate: uint32(a.config.Bitrate * MbpsToBytes),
+		Audio: AudioConfig{
+			SampleRate:         DefaultSampleRate,
+			Channels:           DefaultChannels,
+			MicDeviceIndex:     micIdx,
+			MicVolume:          float32(a.config.MicrophoneVolume) / 100.0,
+			SpeakerDeviceIndex: speakerIdx,
+			SpeakerVolume:      float32(a.config.SystemAudioVolume) / 100.0,
+		},
+		BufferDurationSecs:  uint64(a.config.RecordSeconds + a.config.SegmentDurationSec),
 		SegmentDurationSecs: uint64(a.config.SegmentDurationSec),
 		ShowCursor:          a.config.ShowCursor,
 		ShowBorder:          a.config.ShowBorder,
@@ -316,7 +316,8 @@ func (a *App) StartRecording() error {
 		TempPath:            tempDir,
 	}
 
-	handle, err := InitReplayBuffer(a.config.DisplayIndex, config)
+	// Initialize replay buffer
+	handle, err := InitReplayBuffer(config)
 	if err != nil {
 		a.setState(StatusIdle, "")
 		return fmt.Errorf("failed to start replay buffer: %w", err)
@@ -360,6 +361,15 @@ func (a *App) StopRecording() error {
 	return nil
 }
 
+// checkSaveDebounce verifies if enough time has passed since last save
+func (a *App) checkSaveDebounce() error {
+	if time.Since(a.lastSaveTime) < SaveDebounceDuration {
+		remaining := SaveDebounceSeconds - int(time.Since(a.lastSaveTime).Seconds())
+		return fmt.Errorf("please wait %d seconds before saving another clip", remaining)
+	}
+	return nil
+}
+
 // SaveCurrentClip saves the replay buffer to a file
 func (a *App) SaveCurrentClip() (string, error) {
 	a.mu.Lock()
@@ -374,11 +384,10 @@ func (a *App) SaveCurrentClip() (string, error) {
 		return "", fmt.Errorf("save already in progress")
 	}
 
-	// Debounce: 5 second cooldown between saves
-	if time.Since(a.lastSaveTime) < 5*time.Second {
-		remaining := 5 - int(time.Since(a.lastSaveTime).Seconds())
+	// Check debounce
+	if err := a.checkSaveDebounce(); err != nil {
 		a.mu.Unlock()
-		return "", fmt.Errorf("please wait %d seconds before saving another clip", remaining)
+		return "", err
 	}
 
 	if a.replayHandle == 0 {
@@ -394,7 +403,7 @@ func (a *App) SaveCurrentClip() (string, error) {
 	outputDir := a.config.OutputDir
 	a.mu.Unlock()
 
-	filename := fmt.Sprintf("clip_%s.mp4", time.Now().Format("20060102_150405"))
+	filename := GenerateClipFilename()
 	outputPath := filepath.Join(outputDir, filename)
 
 	err := handle.Save(outputPath)
@@ -446,41 +455,12 @@ func (a *App) ChooseOutputDirectory() (string, error) {
 
 // ListSavedClips returns a list of saved clips in the output directory
 func (a *App) ListSavedClips() ([]Clip, error) {
-	files, err := os.ReadDir(a.config.OutputDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []Clip{}, nil
-		}
-		return nil, err
-	}
-
-	var clips []Clip
-	for _, f := range files {
-		if f.IsDir() || filepath.Ext(f.Name()) != ".mp4" {
-			continue
-		}
-
-		info, err := f.Info()
-		if err != nil {
-			continue
-		}
-
-		clips = append(clips, Clip{
-			Name:    f.Name(),
-			Path:    filepath.Join(a.config.OutputDir, f.Name()),
-			Size:    info.Size(),
-			ModTime: info.ModTime(),
-		})
-	}
-
-	return clips, nil
+	return ListClipsInDirectory(a.config.OutputDir)
 }
 
 // OpenClipInExplorer opens a clip in the default system player
 func (a *App) OpenClipInExplorer(path string) error {
-	// Path is already absolute from ListSavedClips
-	cmd := exec.Command("explorer", path)
-	return cmd.Start()
+	return OpenInExplorer(path)
 }
 
 // OpenOutputDirectory opens the output directory in the system file explorer
@@ -489,40 +469,21 @@ func (a *App) OpenOutputDirectory() error {
 	outputDir := a.config.OutputDir
 	a.mu.RUnlock()
 
-	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
-		if err := os.MkdirAll(outputDir, 0755); err != nil {
-			return fmt.Errorf("failed to create output directory: %w", err)
-		}
+	if err := EnsureDirectoryExists(outputDir); err != nil {
+		return err
 	}
 
-	cmd := exec.Command("explorer", outputDir)
-	return cmd.Start()
+	return OpenInExplorer(outputDir)
 }
 
 // DeleteClips deletes the specified clip files
 func (a *App) DeleteClips(paths []string) error {
-	if len(paths) == 0 {
-		return fmt.Errorf("no clips specified")
-	}
-
 	a.mu.RLock()
 	outputDir := a.config.OutputDir
 	a.mu.RUnlock()
 
-	var errors []string
-	for _, path := range paths {
-		if !strings.HasPrefix(path, outputDir) {
-			errors = append(errors, fmt.Sprintf("%s: not in output directory", filepath.Base(path)))
-			continue
-		}
-
-		if err := os.Remove(path); err != nil {
-			errors = append(errors, fmt.Sprintf("%s: %v", filepath.Base(path), err))
-		}
-	}
-
-	if len(errors) > 0 {
-		return fmt.Errorf("failed to delete some clips: %s", strings.Join(errors, "; "))
+	if err := DeleteClipFiles(paths, outputDir); err != nil {
+		return err
 	}
 
 	a.emitClipsUpdated()
@@ -557,7 +518,7 @@ func (a *App) emitStateChange() {
 
 // updateBufferStatus periodically updates buffer usage from Rust
 func (a *App) updateBufferStatus() {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(BufferUpdateInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -581,13 +542,13 @@ func (a *App) updateBufferStatus() {
 		// Calculate buffer usage
 		elapsed := time.Since(startTime).Seconds()
 		bufferUsage := (status.Duration / maxDuration) * 100
-		if bufferUsage > 100 {
-			bufferUsage = 100
+		if bufferUsage > MaxBufferUsage {
+			bufferUsage = MaxBufferUsage
 		}
 
 		// Convert bytes to MB
-		diskUsageMB := float64(status.DiskUsage) / (1024 * 1024)
-		memoryUsageMB := float64(status.MemoryUsage) / (1024 * 1024)
+		diskUsageMB := float64(status.DiskUsage) / BytesToMB
+		memoryUsageMB := float64(status.MemoryUsage) / BytesToMB
 
 		// Update state
 		a.mu.Lock()
@@ -621,30 +582,35 @@ func (a *App) handleRuntimeError(level string, message string) {
 		})
 	}
 
-	if level == "error" {
-		criticalKeywords := []string{
-			"Replay buffer error",
-			"Failed to send frame",
-			"encoder",
-			"capture",
-			"monitor",
-			"IoError",
-			"WindowsError",
-		}
-
-		for _, keyword := range criticalKeywords {
-			if strings.Contains(message, keyword) {
-				slog.Error("critical error detected, stopping recording", "message", message)
-				go func() {
-					time.Sleep(100 * time.Millisecond)
-					if err := a.StopRecording(); err != nil {
-						slog.Error("failed to stop recording after critical error", "error", err)
-					}
-				}()
-				return
+	if level == "error" && isCriticalError(message) {
+		slog.Error("critical error detected, stopping recording", "message", message)
+		go func() {
+			time.Sleep(CriticalErrorDelay)
+			if err := a.StopRecording(); err != nil {
+				slog.Error("failed to stop recording after critical error", "error", err)
 			}
+		}()
+	}
+}
+
+// isCriticalError checks if an error message contains critical keywords
+func isCriticalError(message string) bool {
+	criticalKeywords := []string{
+		"Replay buffer error",
+		"Failed to send frame",
+		"encoder",
+		"capture",
+		"monitor",
+		"IoError",
+		"WindowsError",
+	}
+
+	for _, keyword := range criticalKeywords {
+		if strings.Contains(message, keyword) {
+			return true
 		}
 	}
+	return false
 }
 
 // --- DTOs for Wails binding ---
@@ -656,11 +622,4 @@ type DisplayInfo struct {
 	Height      int    `json:"height"`
 	RefreshRate int    `json:"refreshRate"`
 	IsPrimary   bool   `json:"isPrimary"`
-}
-
-type Clip struct {
-	Name    string    `json:"name"`
-	Path    string    `json:"path"`
-	Size    int64     `json:"size"`
-	ModTime time.Time `json:"modTime"`
 }

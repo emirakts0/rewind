@@ -32,10 +32,8 @@ pub struct MonitorInfo {
 pub struct AudioConfig {
     pub sample_rate: u32,
     pub channels: u16,
-    pub mic_enabled: bool,
     pub mic_device_index: Option<usize>,
     pub mic_volume: f32,
-    pub speaker_enabled: bool,
     pub speaker_device_index: Option<usize>,
     pub speaker_volume: f32,
 }
@@ -45,10 +43,8 @@ impl Default for AudioConfig {
         Self {
             sample_rate: 48000,
             channels: 2,
-            mic_enabled: false,
             mic_device_index: None,
             mic_volume: 1.0,
-            speaker_enabled: false,
             speaker_device_index: None,
             speaker_volume: 1.0,
         }
@@ -57,6 +53,7 @@ impl Default for AudioConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReplayRecordingConfig {
+    pub monitor_index: usize,
     pub width: u32,
     pub height: u32,
     pub fps: u32,
@@ -253,14 +250,14 @@ impl GraphicsCaptureApiHandler for ReplayScreenRecorder {
             &segment_path,
         )?;
 
-        let init_capture = |enabled: bool, idx: Option<usize>| -> Option<AudioCapture> {
-            if enabled {
+        let init_capture = |idx: Option<usize>| -> Option<AudioCapture> {
+            if let Some(device_idx) = idx {
                 let config = AudioCaptureConfig {
                     sample_rate: flags.audio_config.sample_rate,
                     channels: flags.audio_config.channels,
                     enabled: true,
                 };
-                match AudioCapture::new(idx, config) {
+                match AudioCapture::new(Some(device_idx), config) {
                     Ok(capture) => Some(capture),
                     Err(e) => {
                         log::error!("Failed to init audio source: {}", e);
@@ -272,14 +269,8 @@ impl GraphicsCaptureApiHandler for ReplayScreenRecorder {
             }
         };
 
-        let mic_capture = init_capture(
-            flags.audio_config.mic_enabled,
-            flags.audio_config.mic_device_index,
-        );
-        let speaker_capture = init_capture(
-            flags.audio_config.speaker_enabled,
-            flags.audio_config.speaker_device_index,
-        );
+        let mic_capture = init_capture(flags.audio_config.mic_device_index);
+        let speaker_capture = init_capture(flags.audio_config.speaker_device_index);
 
         let now = Instant::now();
         let stop_signal = flags.handle.lock().unwrap().stop_signal();

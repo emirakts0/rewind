@@ -107,15 +107,14 @@ type AudioDeviceInfo struct {
 type AudioConfig struct {
 	SampleRate         uint32  `json:"sample_rate"`
 	Channels           uint16  `json:"channels"`
-	MicEnabled         bool    `json:"mic_enabled"`
 	MicDeviceIndex     *int    `json:"mic_device_index"`
 	MicVolume          float32 `json:"mic_volume"`
-	SpeakerEnabled     bool    `json:"speaker_enabled"`
 	SpeakerDeviceIndex *int    `json:"speaker_device_index"`
 	SpeakerVolume      float32 `json:"speaker_volume"`
 }
 
 type ReplayRecordingConfig struct {
+	MonitorIndex        int         `json:"monitor_index"`
 	Width               uint32      `json:"width"`
 	Height              uint32      `json:"height"`
 	Fps                 uint32      `json:"fps"`
@@ -248,7 +247,7 @@ type InitResult struct {
 
 type Handle uintptr
 
-func InitReplayBuffer(monitorIndex int, config ReplayRecordingConfig) (Handle, error) {
+func InitReplayBuffer(config ReplayRecordingConfig) (Handle, error) {
 	configJson, err := json.Marshal(config)
 	if err != nil {
 		return 0, fmt.Errorf("failed to marshal config: %w", err)
@@ -257,7 +256,7 @@ func InitReplayBuffer(monitorIndex int, config ReplayRecordingConfig) (Handle, e
 	ptr := stringToPtr(string(configJson))
 
 	resultPtr, _, _ := procInit.Call(
-		uintptr(uint32(monitorIndex)),
+		uintptr(uint32(config.MonitorIndex)), //todo remove this param
 		ptr,
 	)
 
