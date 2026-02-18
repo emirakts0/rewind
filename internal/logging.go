@@ -13,8 +13,20 @@ import (
 
 var logFile *lumberjack.Logger
 
-// Setup initializes the logging system
-func Setup(logPath string, debug bool) error {
+func SetDefaultLogging() {
+	logPath, err := GetLogsDir()
+	if err != nil {
+		log.Printf("Failed to get logs directory: %v", err)
+		logPath = "rewind.log" // Fallback
+	}
+
+	if err := SetupLogging(logPath, true); err != nil {
+		log.Printf("Failed to setup logging: %v", err)
+	}
+}
+
+// SetupLogging Setup initializes the logging system
+func SetupLogging(logPath string, debug bool) error {
 	logDir := filepath.Dir(logPath)
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return fmt.Errorf("failed to create log directory: %w", err)
@@ -57,8 +69,7 @@ func Setup(logPath string, debug bool) error {
 	return nil
 }
 
-// Close closes the log file
-func Close() {
+func CloseLogFile() {
 	if logFile != nil {
 		slog.Info("logging shutdown")
 		err := logFile.Close()
@@ -68,16 +79,4 @@ func Close() {
 			return
 		}
 	}
-}
-
-// GetDefaultLogPath returns the log file path in user's AppData directory
-func GetDefaultLogPath() string {
-	// %LOCALAPPDATA%\Rewind\logs\rewind.log
-	cacheDir, err := os.UserCacheDir()
-	if err != nil {
-		// Fallback to current directory if AppData is not available
-		return filepath.Join(".", "logs", "rewind.log")
-	}
-	logsDir := filepath.Join(cacheDir, "Rewind", "logs")
-	return filepath.Join(logsDir, "rewind.log")
 }

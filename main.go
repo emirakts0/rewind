@@ -23,28 +23,39 @@ var appIcon []byte
 var appIconRecording []byte
 
 func main() {
-	logPath := internal.GetDefaultLogPath()
-	if err := internal.Setup(logPath, true); err != nil {
-		log.Printf("Failed to setup logging: %v", err)
-	}
-	defer internal.Close()
+	internal.SetDefaultLogging()
+	defer internal.CloseLogFile()
+
+	startPprofServer()
 
 	ffmpegPath := internal.GetFFmpegPath()
 	slog.Info("Using FFmpeg", "path", ffmpegPath)
 
-	// Start pprof server
+	rewindApp := internal.New(ffmpegPath)
+	appInstance := createApplication(rewindApp)
+	window := createWindow(appInstance)
+
+	setupTray(appInstance, rewindApp, window)
+	setupHotkeys(rewindApp)
+
+	if err := appInstance.Run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func startPprofServer() {
 	go func() {
-		log.Println("Starting pprof server on :6060")
+		slog.Debug("Starting pprof server on :6060")
 		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
-			log.Printf("pprof failed: %v", err)
+			slog.Debug("pprof failed", err)
 		}
 	}()
+}
 
-	rewindApp := internal.New(ffmpegPath)
-
+func createApplication(rewindApp *internal.App) *application.App {
 	var mainWindow *application.WebviewWindow
 
-	appInstance := application.New(application.Options{
+	app := application.New(application.Options{
 		Name:        "Rewind",
 		Description: "Screen recording application with instant replay",
 		Icon:        appIcon,
@@ -66,10 +77,12 @@ func main() {
 		},
 	})
 
-	// Store the app instance for events
-	rewindApp.SetApp(appInstance)
+	rewindApp.SetApp(app)
+	return app
+}
 
-	window := appInstance.Window.NewWithOptions(application.WebviewWindowOptions{
+func createWindow(app *application.App) *application.WebviewWindow {
+	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            "Rewind",
 		Width:            420,
 		Height:           750,
@@ -82,15 +95,17 @@ func main() {
 		BackgroundColour: application.NewRGBA(15, 15, 20, 255),
 		URL:              "/",
 	})
-	mainWindow = window
 
 	window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 		window.Hide()
 		e.Cancel()
 	})
 
-	// Setup tray
-	trayManager := internal.NewTrayManager(appInstance, rewindApp, window, appIcon, appIconRecording)
+	return window
+}
+
+func setupTray(app *application.App, rewindApp *internal.App, window *application.WebviewWindow) {
+	trayManager := internal.NewTrayManager(app, rewindApp, window, appIcon, appIconRecording)
 	trayManager.Setup()
 
 	window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
@@ -100,15 +115,10 @@ func main() {
 	rewindApp.SetOnStateChange(func(state internal.State) {
 		trayManager.UpdateState()
 	})
+}
 
-	// Setup hotkeys
+func setupHotkeys(rewindApp *internal.App) {
 	hkManager := internal.NewHotkeyManager()
 	hkManager.SetupDefaultHotkeys(rewindApp)
 	hkManager.Start()
-	defer hkManager.Stop()
-
-	err := appInstance.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
 }
