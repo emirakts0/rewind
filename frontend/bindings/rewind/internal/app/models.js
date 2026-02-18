@@ -59,9 +59,6 @@ export class Clip {
     }
 }
 
-/**
- * Config represents user-configurable settings
- */
 export class Config {
     /**
      * Creates a new Config instance.
@@ -84,7 +81,6 @@ export class Config {
         }
         if (!("bitrate" in $$source)) {
             /**
-             * in Mbps
              * @member
              * @type {number}
              */
@@ -97,6 +93,13 @@ export class Config {
              */
             this["recordSeconds"] = 0;
         }
+        if (!("segmentDurationSec" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["segmentDurationSec"] = 0;
+        }
         if (!("outputDir" in $$source)) {
             /**
              * @member
@@ -106,7 +109,6 @@ export class Config {
         }
         if (!("microphoneDevice" in $$source)) {
             /**
-             * device index, -1 = disabled
              * @member
              * @type {number}
              */
@@ -114,11 +116,24 @@ export class Config {
         }
         if (!("systemAudioDevice" in $$source)) {
             /**
-             * device index, -1 = disabled
              * @member
              * @type {number}
              */
             this["systemAudioDevice"] = 0;
+        }
+        if (!("microphoneVolume" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["microphoneVolume"] = 0;
+        }
+        if (!("systemAudioVolume" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["systemAudioVolume"] = 0;
         }
         if (!("showCursor" in $$source)) {
             /**
@@ -213,6 +228,54 @@ export class DisplayInfo {
 }
 
 /**
+ * MemoryEstimate holds estimated memory usage
+ */
+export class MemoryEstimate {
+    /**
+     * Creates a new MemoryEstimate instance.
+     * @param {Partial<MemoryEstimate>} [$$source = {}] - The source object to create the MemoryEstimate.
+     */
+    constructor($$source = {}) {
+        if (!("diskMB" in $$source)) {
+            /**
+             * Estimated disk usage for video segments
+             * @member
+             * @type {number}
+             */
+            this["diskMB"] = 0;
+        }
+        if (!("memoryMB" in $$source)) {
+            /**
+             * Estimated RAM usage for audio buffers
+             * @member
+             * @type {number}
+             */
+            this["memoryMB"] = 0;
+        }
+        if (!("totalMB" in $$source)) {
+            /**
+             * Total estimated usage
+             * @member
+             * @type {number}
+             */
+            this["totalMB"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new MemoryEstimate instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {MemoryEstimate}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new MemoryEstimate(/** @type {Partial<MemoryEstimate>} */($$parsedSource));
+    }
+}
+
+/**
  * State holds the current application state
  */
 export class State {
@@ -251,6 +314,30 @@ export class State {
              */
             this["recordingFor"] = 0;
         }
+        if (!("diskUsageMB" in $$source)) {
+            /**
+             * actual disk space used by video segments in MB
+             * @member
+             * @type {number}
+             */
+            this["diskUsageMB"] = 0;
+        }
+        if (!("memoryUsageMB" in $$source)) {
+            /**
+             * actual memory used by audio buffers in MB
+             * @member
+             * @type {number}
+             */
+            this["memoryUsageMB"] = 0;
+        }
+        if (!("estimate" in $$source)) {
+            /**
+             * estimated memory usage based on config
+             * @member
+             * @type {MemoryEstimate}
+             */
+            this["estimate"] = (new MemoryEstimate());
+        }
 
         Object.assign(this, $$source);
     }
@@ -261,7 +348,11 @@ export class State {
      * @returns {State}
      */
     static createFrom($$source = {}) {
+        const $$createField6_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("estimate" in $$parsedSource) {
+            $$parsedSource["estimate"] = $$createField6_0($$parsedSource["estimate"]);
+        }
         return new State(/** @type {Partial<State>} */($$parsedSource));
     }
 }
@@ -281,3 +372,6 @@ export const Status = {
     StatusRecording: "recording",
     StatusSaving: "saving",
 };
+
+// Private type creation functions
+const $$createType0 = MemoryEstimate.createFrom;

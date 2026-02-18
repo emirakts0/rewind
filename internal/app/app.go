@@ -41,30 +41,6 @@ type Config struct {
 	ShowBorder         bool   `json:"showBorder"`
 }
 
-// MemoryEstimate holds estimated memory usage
-type MemoryEstimate struct {
-	DiskMB   float64 `json:"diskMB"`   // Estimated disk usage for video segments
-	MemoryMB float64 `json:"memoryMB"` // Estimated RAM usage for audio buffers
-	TotalMB  float64 `json:"totalMB"`  // Total estimated usage
-}
-
-// EstimateMemoryUsage calculates estimated memory usage based on config
-func (c *Config) EstimateMemoryUsage() MemoryEstimate {
-	// Video disk usage estimation
-	videoDiskMB := float64(c.Bitrate) * float64(c.RecordSeconds) / 8.0
-
-	// Audio memory is minimal and only shown during recording
-	audioMemoryMB := 0.0
-
-	totalMB := videoDiskMB + audioMemoryMB
-
-	return MemoryEstimate{
-		DiskMB:   videoDiskMB,
-		MemoryMB: audioMemoryMB,
-		TotalMB:  totalMB,
-	}
-}
-
 func DefaultConfig() Config {
 	outputDir := "./clips"
 	if dir, err := utils.GetClipsDir(); err == nil {
@@ -89,13 +65,12 @@ func DefaultConfig() Config {
 
 // State holds the current application state
 type State struct {
-	Status        Status         `json:"status"`
-	ErrorMessage  string         `json:"errorMessage,omitempty"`
-	BufferUsage   float64        `json:"bufferUsage"`   // percentage 0-100
-	RecordingFor  int            `json:"recordingFor"`  // seconds since recording started
-	DiskUsageMB   float64        `json:"diskUsageMB"`   // actual disk space used by video segments in MB
-	MemoryUsageMB float64        `json:"memoryUsageMB"` // actual memory used by audio buffers in MB
-	Estimate      MemoryEstimate `json:"estimate"`      // estimated memory usage based on config
+	Status        Status  `json:"status"`
+	ErrorMessage  string  `json:"errorMessage,omitempty"`
+	BufferUsage   float64 `json:"bufferUsage"`   // percentage 0-100
+	RecordingFor  int     `json:"recordingFor"`  // seconds since recording started
+	DiskUsageMB   float64 `json:"diskUsageMB"`   // actual disk space used by video segments in MB
+	MemoryUsageMB float64 `json:"memoryUsageMB"` // actual memory used by audio buffers in MB
 }
 
 // App is the main application service
@@ -261,25 +236,7 @@ func (a *App) UpdateConfig(cfg Config) error {
 func (a *App) GetRecordingState() State {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-
-	state := a.state
-
-	// Always include estimate based on current config
-	state.Estimate = a.config.EstimateMemoryUsage()
-
-	if a.replayHandle != 0 && a.state.Status == StatusRecording {
-		elapsed := time.Since(a.startTime).Seconds()
-		maxDuration := float64(a.config.RecordSeconds)
-		if maxDuration > 0 {
-			state.BufferUsage = (elapsed / maxDuration) * 100
-			if state.BufferUsage > 100 {
-				state.BufferUsage = 100
-			}
-		}
-		state.RecordingFor = int(elapsed)
-	}
-
-	return state
+	return a.state
 }
 
 // StartRecording begins screen capture and replay buffer recording
@@ -529,6 +486,52 @@ func (a *App) OpenClipInExplorer(path string) error {
 	return cmd.Start()
 }
 
+// OpenOutputDirectory opens the output directory in the system file explorer
+func (a *App) OpenOutputDirectory() error {
+	a.mu.RLock()
+	outputDir := a.config.OutputDir
+	a.mu.RUnlock()
+
+	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(outputDir, 0755); err != nil {
+			return fmt.Errorf("failed to create output directory: %w", err)
+		}
+	}
+
+	cmd := exec.Command("explorer", outputDir)
+	return cmd.Start()
+}
+
+// DeleteClips deletes the specified clip files
+func (a *App) DeleteClips(paths []string) error {
+	if len(paths) == 0 {
+		return fmt.Errorf("no clips specified")
+	}
+
+	a.mu.RLock()
+	outputDir := a.config.OutputDir
+	a.mu.RUnlock()
+
+	var errors []string
+	for _, path := range paths {
+		if !strings.HasPrefix(path, outputDir) {
+			errors = append(errors, fmt.Sprintf("%s: not in output directory", filepath.Base(path)))
+			continue
+		}
+
+		if err := os.Remove(path); err != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", filepath.Base(path), err))
+		}
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("failed to delete some clips: %s", strings.Join(errors, "; "))
+	}
+
+	a.emitClipsUpdated()
+	return nil
+}
+
 func (a *App) emitClipsUpdated() {
 	if a.app != nil {
 		a.app.Event.Emit("clips-updated")
@@ -539,7 +542,6 @@ func (a *App) emitClipsUpdated() {
 func (a *App) setState(status Status, errorMsg string) {
 	a.state.Status = status
 	a.state.ErrorMessage = errorMsg
-	a.state.Estimate = a.config.EstimateMemoryUsage()
 
 	a.emitStateChange()
 }
@@ -596,7 +598,6 @@ func (a *App) updateBufferStatus() {
 		a.state.RecordingFor = int(elapsed)
 		a.state.DiskUsageMB = diskUsageMB
 		a.state.MemoryUsageMB = memoryUsageMB
-		a.state.Estimate = a.config.EstimateMemoryUsage()
 		state := a.state
 		a.mu.Unlock()
 

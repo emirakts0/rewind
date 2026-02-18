@@ -36,11 +36,6 @@ export interface State {
     recordingFor: number
     diskUsageMB: number
     memoryUsageMB: number
-    estimate: {
-        diskMB: number
-        memoryMB: number
-        totalMB: number
-    }
 }
 
 import * as AppBindings from '../../bindings/rewind/internal/app/app'
@@ -89,6 +84,14 @@ export const api = {
 
     async openClip(path: string): Promise<void> {
         return AppBindings.OpenClipInExplorer(path)
+    },
+
+    async openOutputDirectory(): Promise<void> {
+        return AppBindings.OpenOutputDirectory()
+    },
+
+    async deleteClips(paths: string[]): Promise<void> {
+        return AppBindings.DeleteClips(paths)
     },
 
     async getInputDevices(): Promise<string[]> {

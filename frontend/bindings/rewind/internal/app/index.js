@@ -11,6 +11,7 @@ export {
     Clip,
     Config,
     DisplayInfo,
+    MemoryEstimate,
     State,
     Status
 } from "./models.js";

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from "framer-motion"
-import { FolderOpen, FileVideo, Clock, RefreshCcw, ArrowLeft } from 'lucide-react'
+import { FolderOpen, FileVideo, Clock, RefreshCcw, ArrowLeft, ExternalLink, Trash2, CheckCircle2, Circle } from 'lucide-react'
 import { api, type Clip } from '@/lib/wails'
 import { cn, formatBytes } from '@/lib/utils'
 
@@ -20,6 +20,10 @@ export function ClipsDrawer() {
     const [clips, setClips] = useState<Clip[]>([])
     const [loading, setLoading] = useState(false)
     const [open, setOpen] = useState(false)
+    const [selectedClips, setSelectedClips] = useState<Set<string>>(new Set())
+    const [selectionMode, setSelectionMode] = useState(false)
+    const [deleting, setDeleting] = useState(false)
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
     const fetchClips = async () => {
         setLoading(true)
@@ -42,6 +46,10 @@ export function ClipsDrawer() {
         if (open) {
             toast.dismiss()
             fetchClips()
+        } else {
+            // Reset selection when drawer closes
+            setSelectionMode(false)
+            setSelectedClips(new Set())
         }
     }, [open])
 
@@ -56,11 +64,64 @@ export function ClipsDrawer() {
     }, [open])
 
     const handleOpenClip = async (path: string) => {
+        if (selectionMode) return
         try {
             await api.openClip(path)
         } catch (err) {
             toast.error("Failed to open clip")
         }
+    }
+
+    const handleOpenFolder = async () => {
+        try {
+            await api.openOutputDirectory()
+        } catch (err) {
+            toast.error("Failed to open folder")
+        }
+    }
+
+    const toggleSelection = (path: string) => {
+        setSelectedClips(prev => {
+            const newSet = new Set(prev)
+            if (newSet.has(path)) {
+                newSet.delete(path)
+            } else {
+                newSet.add(path)
+            }
+            return newSet
+        })
+    }
+
+    const handleDeleteSelected = async () => {
+        if (selectedClips.size === 0) return
+
+        setDeleting(true)
+        try {
+            await api.deleteClips(Array.from(selectedClips))
+            toast.success(`Deleted ${selectedClips.size} clip${selectedClips.size > 1 ? 's' : ''}`)
+            setSelectedClips(new Set())
+            setSelectionMode(false)
+            setShowDeleteConfirm(false)
+            await fetchClips()
+        } catch (err: any) {
+            toast.error(err?.message || "Failed to delete clips")
+        } finally {
+            setDeleting(false)
+        }
+    }
+
+    const handleDeleteClick = () => {
+        if (selectedClips.size === 0) return
+        setShowDeleteConfirm(true)
+    }
+
+    const handleCancelDelete = () => {
+        setShowDeleteConfirm(false)
+    }
+
+    const toggleSelectionMode = () => {
+        setSelectionMode(!selectionMode)
+        setSelectedClips(new Set())
     }
 
     return (
@@ -87,16 +148,70 @@ export function ClipsDrawer() {
                             <ArrowLeft className="h-4 w-4" />
                         </Button>
                         <span>Library</span>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-muted-foreground hover:text-foreground ml-auto"
-                            style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}
-                            onClick={fetchClips}
-                            disabled={loading}
-                        >
-                            <RefreshCcw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
-                        </Button>
+                        {selectionMode && (
+                            <span className="text-xs text-muted-foreground font-normal">
+                                {selectedClips.size} selected
+                            </span>
+                        )}
+                        <div className="ml-auto flex items-center gap-1">
+                            {selectionMode ? (
+                                <>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                                        style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}
+                                        onClick={toggleSelectionMode}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground hover:bg-white/10"
+                                        style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}
+                                        onClick={handleDeleteClick}
+                                        disabled={selectedClips.size === 0 || deleting}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </>
+                            ) : (
+                                <>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                        style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}
+                                        onClick={toggleSelectionMode}
+                                        disabled={clips.length === 0}
+                                        title="Select clips to delete"
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                        style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}
+                                        onClick={handleOpenFolder}
+                                        title="Open folder in explorer"
+                                    >
+                                        <ExternalLink className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                        style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}
+                                        onClick={fetchClips}
+                                        disabled={loading}
+                                    >
+                                        <RefreshCcw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+                                    </Button>
+                                </>
+                            )}
+                        </div>
                     </SheetTitle>
                     <SheetDescription className="hidden">
                         All your captured moments.
@@ -112,41 +227,109 @@ export function ClipsDrawer() {
                     ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 px-4 pt-3 pb-4">
                             <AnimatePresence mode="popLayout" initial={false}>
-                                {clips.map((clip) => (
-                                    <motion.button
-                                        key={clip.path}
-                                        layout
-                                        initial={{ opacity: 0, scale: 0.8, y: 20 }}
-                                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                                        exit={{ opacity: 0, scale: 0.8, y: -10 }}
-                                        transition={{
-                                            opacity: { duration: 0.25 },
-                                            scale: { duration: 0.4, type: "spring", stiffness: 200, damping: 20 },
-                                            y: { duration: 0.4, type: "spring", stiffness: 200, damping: 20 },
-                                            layout: { duration: 0.5, type: "spring", stiffness: 150, damping: 25 }
-                                        }}
-                                        onClick={() => handleOpenClip(clip.path)}
-                                        className="group relative flex items-center gap-3 p-3 rounded-lg border border-border/40 bg-card/50 hover:bg-accent/50 transition-colors duration-300 text-left"
-                                    >
-                                        <div className="h-10 w-10 rounded-md bg-secondary/50 flex items-center justify-center shrink-0">
-                                            <FileVideo className="h-5 w-5 text-primary" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="font-medium text-sm truncate">{clip.name}</p>
-                                            <div className="flex items-center gap-2 text-[10px] text-muted-foreground/80 mt-0.5">
-                                                <span className="flex items-center gap-1 bg-background/50 px-1.5 py-0.5 rounded">
-                                                    <Clock className="w-2.5 h-2.5" />
-                                                    {new Date(clip.modTime).toLocaleString()}
-                                                </span>
-                                                <span className="font-mono">{formatBytes(clip.size)}</span>
+                                {clips.map((clip) => {
+                                    const isSelected = selectedClips.has(clip.path)
+                                    return (
+                                        <motion.button
+                                            key={clip.path}
+                                            layout
+                                            initial={{ opacity: 0, scale: 0.8, y: 20 }}
+                                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                                            exit={{ opacity: 0, scale: 0.8, y: -10 }}
+                                            transition={{
+                                                opacity: { duration: 0.25 },
+                                                scale: { duration: 0.4, type: "spring", stiffness: 200, damping: 20 },
+                                                y: { duration: 0.4, type: "spring", stiffness: 200, damping: 20 },
+                                                layout: { duration: 0.5, type: "spring", stiffness: 150, damping: 25 }
+                                            }}
+                                            onClick={() => selectionMode ? toggleSelection(clip.path) : handleOpenClip(clip.path)}
+                                            className={cn(
+                                                "group relative flex items-center gap-3 p-3 rounded-lg border transition-colors duration-300 text-left",
+                                                selectionMode
+                                                    ? isSelected
+                                                        ? "border-primary bg-primary/10"
+                                                        : "border-border/40 bg-card/50 hover:bg-accent/30"
+                                                    : "border-border/40 bg-card/50 hover:bg-accent/50"
+                                            )}
+                                        >
+                                            {selectionMode && (
+                                                <div className="absolute top-2 right-2 z-10">
+                                                    {isSelected ? (
+                                                        <CheckCircle2 className="h-5 w-5 text-primary" />
+                                                    ) : (
+                                                        <Circle className="h-5 w-5 text-muted-foreground/50" />
+                                                    )}
+                                                </div>
+                                            )}
+                                            <div className="h-10 w-10 rounded-md bg-secondary/50 flex items-center justify-center shrink-0">
+                                                <FileVideo className="h-5 w-5 text-primary" />
                                             </div>
-                                        </div>
-                                    </motion.button>
-                                ))}
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-medium text-sm truncate">{clip.name}</p>
+                                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground/80 mt-0.5">
+                                                    <span className="flex items-center gap-1 bg-background/50 px-1.5 py-0.5 rounded">
+                                                        <Clock className="w-2.5 h-2.5" />
+                                                        {new Date(clip.modTime).toLocaleString()}
+                                                    </span>
+                                                    <span className="font-mono">{formatBytes(clip.size)}</span>
+                                                </div>
+                                            </div>
+                                        </motion.button>
+                                    )
+                                })}
                             </AnimatePresence>
                         </div>
                     )}
                 </ScrollArea>
+
+                {/* Delete Confirmation Overlay */}
+                <AnimatePresence>
+                    {showDeleteConfirm && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50"
+                            onClick={handleCancelDelete}
+                        >
+                            <motion.div
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.9, opacity: 0 }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="bg-card border border-border rounded-lg p-6 max-w-sm mx-4 shadow-xl"
+                            >
+                                <div className="flex flex-col items-center text-center">
+                                    <div className="mb-4">
+                                        <Trash2 className="h-12 w-12 text-muted-foreground" />
+                                    </div>
+                                    <h3 className="text-xl font-semibold mb-2">Delete Clips?</h3>
+                                    <p className="text-sm text-muted-foreground mb-6">
+                                        Are you sure you want to delete {selectedClips.size} clip{selectedClips.size > 1 ? 's' : ''}? This action cannot be undone.
+                                    </p>
+                                    <div className="flex gap-3 w-full">
+                                        <Button
+                                            variant="outline"
+                                            onClick={handleCancelDelete}
+                                            disabled={deleting}
+                                            className="flex-1"
+                                        >
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            variant="destructive"
+                                            onClick={handleDeleteSelected}
+                                            disabled={deleting}
+                                            className="flex-1 bg-destructive hover:bg-destructive/90"
+                                        >
+                                            {deleting ? 'Deleting...' : 'Delete'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </SheetContent >
         </Sheet >
     )

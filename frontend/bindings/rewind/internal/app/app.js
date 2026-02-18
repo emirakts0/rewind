@@ -28,15 +28,12 @@ export function ChooseOutputDirectory() {
 }
 
 /**
- * EstimateMemory calculates the estimated buffer size
- * @param {number} bitrate
- * @param {number} seconds
- * @param {boolean} hasMic
- * @param {boolean} hasSys
- * @returns {$CancellablePromise<string>}
+ * DeleteClips deletes the specified clip files
+ * @param {string[]} paths
+ * @returns {$CancellablePromise<void>}
  */
-export function EstimateMemory(bitrate, seconds, hasMic, hasSys) {
-    return $Call.ByID(2746090786, bitrate, seconds, hasMic, hasSys);
+export function DeleteClips(paths) {
+    return $Call.ByID(338452631, paths);
 }
 
 /**
@@ -124,6 +121,14 @@ export function OpenClipInExplorer(path) {
 }
 
 /**
+ * OpenOutputDirectory opens the output directory in the system file explorer
+ * @returns {$CancellablePromise<void>}
+ */
+export function OpenOutputDirectory() {
+    return $Call.ByID(2470192441);
+}
+
+/**
  * SaveCurrentClip saves the replay buffer to a file
  * @returns {$CancellablePromise<string>}
  */
@@ -158,7 +163,6 @@ export function StartRecording() {
 }
 
 /**
- * StopRecording stops the current recording session
  * @returns {$CancellablePromise<void>}
  */
 export function StopRecording() {
@@ -166,7 +170,6 @@ export function StopRecording() {
 }
 
 /**
- * UpdateConfig updates the application configuration (only when not recording)
  * @param {$models.Config} cfg
  * @returns {$CancellablePromise<void>}
  */

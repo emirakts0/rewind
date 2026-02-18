@@ -37,29 +37,23 @@ function App() {
         bufferUsage: 0,
         recordingFor: 0,
         diskUsageMB: 0,
-        memoryUsageMB: 0,
-        estimate: {
-            diskMB: 0,
-            memoryMB: 0,
-            totalMB: 0
-        }
+        memoryUsageMB: 0
     })
     const [loading, setLoading] = useState(true)
     const [configOpen, setConfigOpen] = useState(false)
     
     const isRecording = state.status === 'recording' || state.status === 'saving'
     
+    // Calculate estimate based on current config (for UI updates before recording starts)
     const calculateEstimate = (cfg: Config) => {
-        const diskMB = (cfg.bitrate * cfg.recordSeconds) / 8
-        const memoryMB = 0
-        return { diskMB, memoryMB, totalMB: diskMB + memoryMB }
+        const actualBufferSeconds = cfg.recordSeconds + cfg.segmentDurationSec
+        const diskMB = (cfg.bitrate * actualBufferSeconds) / 8
+        return diskMB
     }
     
-    const currentEstimate = isRecording ? state.estimate : calculateEstimate(config)
-    
-    const estimateDiskDisplay = currentEstimate.diskMB > 0 
-        ? `${currentEstimate.diskMB.toFixed(0)}MB` 
-        : "0MB"
+    const estimateDiskDisplay = isRecording
+        ? `${state.diskUsageMB.toFixed(1)}MB`
+        : `${calculateEstimate(config).toFixed(0)}MB`
     
     const actualDiskDisplay = state.diskUsageMB > 0 
         ? `${state.diskUsageMB.toFixed(1)}MB` 
@@ -235,6 +229,10 @@ function App() {
     return (
         <div className="h-screen w-screen bg-transparent flex flex-col overflow-hidden select-none font-sans text-foreground relative">
             <TitleBar>
+                <StatusBadge 
+                    status={isRecording ? 'recording' : 'idle'} 
+                    timer={isRecording ? formatTime(state.recordingFor) : undefined}
+                />
                 <ClipsDrawer />
             </TitleBar>
 
@@ -289,14 +287,7 @@ function App() {
                     configOpen ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
                 )}>
                     <div className="flex flex-col items-center gap-3 overflow-hidden">
-                        <div className="flex items-center justify-center min-h-[32px]">
-                            <StatusBadge 
-                                status={isRecording ? 'recording' : 'idle'} 
-                                timer={isRecording ? formatTime(state.recordingFor) : undefined}
-                            />
-                        </div>
-
-                        <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 mt-2 opacity-60 items-center">
+                        <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 mt-4 opacity-60 items-center">
                             <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider text-left">Start/Stop</span>
                             <KbdGroup>
                                 <Kbd>Ctrl</Kbd>
