@@ -372,6 +372,9 @@ func (a *App) checkSaveDebounce() error {
 
 // SaveCurrentClip saves the replay buffer to a file
 func (a *App) SaveCurrentClip() (string, error) {
+	saveStartTime := time.Now()
+	slog.Info("save operation started")
+
 	a.mu.Lock()
 
 	if a.state.Status != StatusRecording {
@@ -406,7 +409,9 @@ func (a *App) SaveCurrentClip() (string, error) {
 	filename := GenerateClipFilename()
 	outputPath := filepath.Join(outputDir, filename)
 
+	rustSaveStartTime := time.Now()
 	err := handle.Save(outputPath)
+	rustSaveDuration := time.Since(rustSaveStartTime)
 
 	a.mu.Lock()
 	a.state.Status = previousStatus
@@ -417,12 +422,24 @@ func (a *App) SaveCurrentClip() (string, error) {
 	a.mu.Unlock()
 
 	if err != nil {
+		totalDuration := time.Since(saveStartTime)
+		slog.Error("save operation failed",
+			"filename", filename,
+			"error", err,
+			"rust_save_duration", rustSaveDuration,
+			"total_duration", totalDuration,
+		)
 		return "", err
 	}
 
 	a.emitClipsUpdated()
 
-	slog.Info("clip saved", "filename", filename)
+	totalDuration := time.Since(saveStartTime)
+	slog.Info("save operation completed",
+		"filename", filename,
+		"rust_save_duration", rustSaveDuration,
+		"total_duration", totalDuration,
+	)
 	return filename, nil
 }
 

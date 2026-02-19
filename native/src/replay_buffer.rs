@@ -76,7 +76,7 @@ impl ReplayBuffer {
         let dest_path = self
             .config
             .temp_dir
-            .join(format!("segment_{:06}.ts", sequence));
+            .join(format!("segment_{:06}.mp4", sequence));
 
         let mut success = false;
         for _ in 0..5 {
@@ -188,14 +188,21 @@ impl ReplayBuffer {
 
         let output_path = output_path.as_ref();
 
-        log::info!("Concatenating video segments...");
-        let temp_video = self.config.temp_dir.join("temp_video.mp4");
+        log::info!("Preparing video concat list...");
         let concat_list_path = self.config.temp_dir.join("concat_list.txt");
         let mut concat_file = File::create(&concat_list_path)?;
 
         for path in &segment_paths {
             let abs_path = std::fs::canonicalize(path)?;
-            writeln!(concat_file, "file '{}'", abs_path.display())?;
+            let path_str = abs_path.to_string_lossy();
+
+            let clean_path = if path_str.starts_with(r"\\?\") {
+                &path_str[4..]
+            } else {
+                &path_str
+            };
+            
+            writeln!(concat_file, "file '{}'", clean_path)?;
         }
         concat_file.sync_all()?;
 
@@ -204,69 +211,8 @@ impl ReplayBuffer {
             return Err("Save operation timed out (45s limit exceeded)".into());
         }
 
-        let output = std::process::Command::new(&self.config.ffmpeg_path)
-            .args(&[
-                "-f",
-                "concat",
-                "-safe",
-                "0",
-                "-i",
-                concat_list_path.to_str().unwrap(),
-                "-c",
-                "copy",
-                "-y",
-                temp_video.to_str().unwrap(),
-            ])
-            .output()?;
-
-        if !output.stderr.is_empty() {
-            for line in String::from_utf8_lossy(&output.stderr).lines() {
-                if !line.trim().is_empty() {
-                    log::debug!("[FFMPEG] {}", line);
-                }
-            }
-        }
-
-        if !output.status.success() {
-            let _ = std::fs::remove_file(&concat_list_path);
-            return Err("FFmpeg video concat failed".into());
-        }
-
-        if start_time.elapsed() >= timeout_duration {
-            let _ = std::fs::remove_file(&concat_list_path);
-            let _ = std::fs::remove_file(&temp_video);
-            return Err("Save operation timed out during video concatenation".into());
-        }
-
-        let ffprobe_path = Path::new(&self.config.ffmpeg_path)
-            .parent()
-            .unwrap_or(Path::new("."))
-            .join("ffprobe");
-
-        let ffprobe_cmd = if ffprobe_path.exists() {
-            ffprobe_path.to_string_lossy().to_string()
-        } else {
-            "ffprobe".to_string()
-        };
-
-        let video_duration_output = std::process::Command::new(&ffprobe_cmd)
-            .args(&[
-                "-v",
-                "error",
-                "-show_entries",
-                "format=duration",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-                temp_video.to_str().unwrap(),
-            ])
-            .output()?;
-
-        let video_duration: f64 = String::from_utf8_lossy(&video_duration_output.stdout)
-            .trim()
-            .parse()
-            .unwrap_or(0.0);
-
-        log::info!("   Video container duration: {:.2}s", video_duration);
+        // Calculate video duration from segments
+        let video_duration = total_dur;
 
         let bpf = (audio_channels as usize) * 2;
 
@@ -403,18 +349,23 @@ impl ReplayBuffer {
 
             if start_time.elapsed() >= timeout_duration {
                 let _ = std::fs::remove_file(&temp_audio);
-                let _ = std::fs::remove_file(&temp_video);
                 let _ = std::fs::remove_file(&concat_list_path);
                 return Err("Save operation timed out before muxing".into());
             }
 
-            log::info!("Muxing video + audio...");
+            log::info!("Concatenating video + muxing audio in single FFmpeg pass...");
 
             let ar_str = audio_sample_rate.to_string();
             let ac_str = audio_channels.to_string();
 
-            let output = std::process::Command::new("ffmpeg")
+            let output = std::process::Command::new(&self.config.ffmpeg_path)
                 .args(&[
+                    "-f",
+                    "concat",
+                    "-safe",
+                    "0",
+                    "-i",
+                    concat_list_path.to_str().unwrap(),
                     "-f",
                     "s16le",
                     "-ar",
@@ -423,8 +374,6 @@ impl ReplayBuffer {
                     &ac_str,
                     "-i",
                     temp_audio.to_str().unwrap(),
-                    "-i",
-                    temp_video.to_str().unwrap(),
                     "-c:v",
                     "copy",
                     "-c:a",
@@ -433,9 +382,9 @@ impl ReplayBuffer {
                     "192k",
                     "-shortest",
                     "-map",
-                    "1:v:0",
+                    "0:v:0",
                     "-map",
-                    "0:a:0",
+                    "1:a:0",
                     "-y",
                     output_path.to_str().unwrap(),
                 ])
@@ -450,11 +399,10 @@ impl ReplayBuffer {
             }
 
             let _ = std::fs::remove_file(&temp_audio);
-            let _ = std::fs::remove_file(&temp_video);
             let _ = std::fs::remove_file(&concat_list_path);
 
             if !output.status.success() {
-                return Err("FFmpeg mux failed".into());
+                return Err("FFmpeg concat+mux failed".into());
             }
 
             if start_time.elapsed() >= timeout_duration {
@@ -462,16 +410,41 @@ impl ReplayBuffer {
                 return Err("Save operation timed out after muxing".into());
             }
         } else {
-            log::info!("   No audio data available, saving video only...");
+            log::info!("No audio data available, concatenating video only...");
             
             if start_time.elapsed() >= timeout_duration {
-                let _ = std::fs::remove_file(&temp_video);
                 let _ = std::fs::remove_file(&concat_list_path);
                 return Err("Save operation timed out (45s limit exceeded)".into());
             }
             
-            std::fs::rename(&temp_video, output_path)?;
+            let output = std::process::Command::new(&self.config.ffmpeg_path)
+                .args(&[
+                    "-f",
+                    "concat",
+                    "-safe",
+                    "0",
+                    "-i",
+                    concat_list_path.to_str().unwrap(),
+                    "-c",
+                    "copy",
+                    "-y",
+                    output_path.to_str().unwrap(),
+                ])
+                .output()?;
+
+            if !output.stderr.is_empty() {
+                for line in String::from_utf8_lossy(&output.stderr).lines() {
+                    if !line.trim().is_empty() {
+                        log::debug!("[FFMPEG] {}", line);
+                    }
+                }
+            }
+
             let _ = std::fs::remove_file(&concat_list_path);
+
+            if !output.status.success() {
+                return Err("FFmpeg video concat failed".into());
+            }
         }
 
         log::info!("Saved to: {}", output_path.display());
