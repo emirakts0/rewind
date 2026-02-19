@@ -157,6 +157,26 @@ func ValidateConfig(cfg *Config) (bool, error) {
 	return needsSave, nil
 }
 
+// ValidateAndFixConfig checks if config values are valid and fixes them if needed
+func ValidateAndFixConfig(cfg *Config) error {
+	needsSave, err := ValidateConfig(cfg)
+	if err != nil {
+		return err
+	}
+
+	if needsSave {
+		if err := saveConfigToFile(*cfg); err != nil {
+			slog.Warn("failed to save corrected config", "error", err)
+			return err
+		}
+		slog.Info("config validated and corrected")
+	} else {
+		slog.Info("config validation passed")
+	}
+
+	return nil
+}
+
 // ValidateConfigValues validates configuration values for business rules
 func ValidateConfigValues(cfg Config) error {
 	if cfg.FPS <= 0 || cfg.FPS > MaxFPS {

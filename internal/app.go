@@ -199,22 +199,7 @@ func (a *App) validateAndFixConfig() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	needsSave, err := ValidateConfig(&a.config)
-	if err != nil {
-		return err
-	}
-
-	if needsSave {
-		if err := saveConfigToFile(a.config); err != nil {
-			slog.Warn("failed to save corrected config", "error", err)
-			return err
-		}
-		slog.Info("config validated and corrected")
-	} else {
-		slog.Info("config validation passed")
-	}
-
-	return nil
+	return ValidateAndFixConfig(&a.config)
 }
 
 // RefreshConfig reloads devices and validates config
