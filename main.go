@@ -92,6 +92,7 @@ func createWindow(app *application.App) *application.WebviewWindow {
 		MaxHeight:        750,
 		DisableResize:    true,
 		Frameless:        true,
+		AlwaysOnTop:      true,
 		BackgroundColour: application.NewRGBA(15, 15, 20, 255),
 		URL:              "/",
 	})

@@ -150,6 +150,10 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 		slog.Warn("failed to cleanup temp segments on startup", "error", err)
 	}
 
+	if err := a.validateAndFixConfig(); err != nil {
+		slog.Warn("failed to validate config", "error", err)
+	}
+
 	return nil
 }
 
@@ -225,6 +229,73 @@ func (a *App) GetConfig() Config {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.config
+}
+
+// validateAndFixConfig checks if config values are valid and fixes them if needed
+func (a *App) validateAndFixConfig() error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	needsSave := false
+
+	// Validate monitor index
+	monitors, err := GetMonitors()
+	if err != nil {
+		slog.Warn("failed to get monitors for validation", "error", err)
+	} else if len(monitors) > 0 {
+		if a.config.DisplayIndex >= len(monitors) || a.config.DisplayIndex < 0 {
+			slog.Warn("invalid display index in config, resetting to 0", "configured", a.config.DisplayIndex, "available", len(monitors))
+			a.config.DisplayIndex = 0
+			needsSave = true
+		}
+	}
+
+	// Validate audio devices
+	devices, err := ListAudioDevices()
+	if err != nil {
+		slog.Warn("failed to get audio devices for validation", "error", err)
+	} else {
+		inputCount := 0
+		outputCount := 0
+		for _, d := range devices {
+			if d.IsInput {
+				inputCount++
+			} else {
+				outputCount++
+			}
+		}
+
+		// Validate microphone device
+		if a.config.MicrophoneDevice >= inputCount {
+			slog.Warn("invalid microphone device in config, disabling", "configured", a.config.MicrophoneDevice, "available", inputCount)
+			a.config.MicrophoneDevice = -1
+			needsSave = true
+		}
+
+		// Validate system audio device
+		if a.config.SystemAudioDevice >= outputCount {
+			slog.Warn("invalid system audio device in config, disabling", "configured", a.config.SystemAudioDevice, "available", outputCount)
+			a.config.SystemAudioDevice = -1
+			needsSave = true
+		}
+	}
+
+	if needsSave {
+		if err := saveConfigToFile(a.config); err != nil {
+			slog.Warn("failed to save corrected config", "error", err)
+			return err
+		}
+		slog.Info("config validated and corrected")
+	} else {
+		slog.Info("config validation passed")
+	}
+
+	return nil
+}
+
+// RefreshConfig reloads devices and validates config
+func (a *App) RefreshConfig() error {
+	return a.validateAndFixConfig()
 }
 
 func (a *App) UpdateConfig(cfg Config) error {

@@ -104,6 +104,7 @@ export function ConfigPanel({
                                         onRefreshDevices()
                                     }}
                                     disabled={disabled}
+                                    title="Refresh config & devices"
                                 >
                                     <RefreshCw className="w-3.5 h-3.5" />
                                 </Button>

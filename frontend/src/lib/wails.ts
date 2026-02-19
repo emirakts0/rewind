@@ -102,6 +102,10 @@ export const api = {
         return AppBindings.ListAudioOutputDevices()
     },
 
+    async refreshConfig(): Promise<void> {
+        return AppBindings.RefreshConfig()
+    },
+
     Events: {
         On: (eventName: string, callback: (data: any) => void) => {
             return Events.On(eventName, callback)

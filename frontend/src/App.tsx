@@ -205,15 +205,23 @@ function App() {
 
     const handleRefreshDevices = useCallback(async () => {
         try {
-            const [inputs, outputs] = await Promise.all([
+            await api.refreshConfig()
+
+            const [displays, inputs, outputs, cfg] = await Promise.all([
+                api.getDisplays(),
                 api.getInputDevices(),
-                api.getOutputDevices()
+                api.getOutputDevices(),
+                api.getConfig()
             ])
+            
+            setDisplays(displays || [])
             setInputDevices(inputs || [])
             setOutputDevices(outputs || [])
-            toast.success("Devices refreshed")
+            setConfig(prev => ({ ...prev, ...cfg }))
+            
+            toast.success("Config refreshed")
         } catch (err: any) {
-            console.error("Device refresh error:", err)
+            console.error("Config refresh error:", err)
             toast.error(formatError(err))
         }
     }, [])
