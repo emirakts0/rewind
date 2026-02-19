@@ -218,15 +218,18 @@ export function ConfigPanel({
                                                         <TooltipTrigger asChild>
                                                             <Info className="w-3 h-3 text-muted-foreground/60 hover:text-muted-foreground cursor-help transition-colors" />
                                                         </TooltipTrigger>
-                                                        <TooltipContent side="right" className="max-w-[200px] p-2">
+                                                        <TooltipContent side="right" className="max-w-[220px] p-2">
                                                             <div className="space-y-1 text-[10px] leading-relaxed normal-case">
                                                                 <p className="text-muted-foreground">
-                                                                    How long each video file lasts before rotating to next one.
+                                                                    Duration of each video segment before rotating to the next one.
                                                                 </p>
                                                                 <p className="text-muted-foreground">
-                                                                    Longer segments may lose up to that duration when saving since current segment isn't included.
+                                                                    <span className="text-green-400">Higher values:</span> Faster saves, less disk fragmentation.
                                                                 </p>
-                                                                <p className="text-primary text-[9px] pt-0.5">5s recommended</p>
+                                                                <p className="text-muted-foreground">
+                                                                    <span className="text-amber-400">Trade-off:</span> The current recording segment isn't saved, so you may lose up to this duration from the moment you hit save.
+                                                                </p>
+                                                                <p className="text-primary text-[9px] pt-0.5">5s recommended for balance</p>
                                                             </div>
                                                         </TooltipContent>
                                                     </Tooltip>
