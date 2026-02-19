@@ -1,5 +1,7 @@
 
-
+<p align="center">
+  <img src="readme/rewind_banner.png" alt="Rewind Banner" width="100%">
+</p>
 
 
 <h1 align="center">Rewind</h1>
@@ -19,15 +21,6 @@
 
 
 </div>
-
-
-
-<p align="center">
-  <img src="build/assets/icon.ico" alt="Rewind Icon" width="180">
-</p>
-
-
-
 
 
 
@@ -58,9 +51,7 @@ Rewind continuously captures your screen in the background and lets you save the
 - **React** - Dynamic and responsive frontend user interface
 - **TypeScript** - Type-safe development for robust code
 
-<p align="center">
-  <img src="readme/rewind_banner.png" alt="Rewind Banner" width="100%">
-</p>
+
 
 ## Installation
 
@@ -147,5 +138,6 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 
 <p align="center">
+  <img src="build/assets/icon.ico" alt="Rewind Icon" width="30" style="vertical-align: middle; margin-bottom: 4px;">
   <a href="mailto:emirakts0@gmail.com">emirakts0@gmail.com</a>
 </p>
