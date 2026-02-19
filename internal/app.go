@@ -21,43 +21,6 @@ const (
 	StatusSaving    Status = "saving"
 )
 
-type Config struct {
-	DisplayIndex       int    `json:"displayIndex"`
-	FPS                int    `json:"fps"`
-	Bitrate            int    `json:"bitrate"`
-	RecordSeconds      int    `json:"recordSeconds"`
-	SegmentDurationSec int    `json:"segmentDurationSec"`
-	OutputDir          string `json:"outputDir"`
-	MicrophoneDevice   int    `json:"microphoneDevice"`
-	SystemAudioDevice  int    `json:"systemAudioDevice"`
-	MicrophoneVolume   int    `json:"microphoneVolume"`
-	SystemAudioVolume  int    `json:"systemAudioVolume"`
-	ShowCursor         bool   `json:"showCursor"`
-	ShowBorder         bool   `json:"showBorder"`
-}
-
-func DefaultConfig() Config {
-	outputDir := "./clips"
-	if dir, err := GetClipsDir(); err == nil {
-		outputDir = dir
-	}
-
-	return Config{
-		DisplayIndex:       0,
-		FPS:                30,
-		Bitrate:            15,
-		RecordSeconds:      30,
-		SegmentDurationSec: 5,
-		OutputDir:          outputDir,
-		MicrophoneDevice:   -1,
-		SystemAudioDevice:  -1,
-		MicrophoneVolume:   100,
-		SystemAudioVolume:  100,
-		ShowCursor:         true,
-		ShowBorder:         false,
-	}
-}
-
 // State holds the current application state
 type State struct {
 	Status        Status  `json:"status"`
@@ -236,48 +199,9 @@ func (a *App) validateAndFixConfig() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	needsSave := false
-
-	// Validate monitor index
-	monitors, err := GetMonitors()
+	needsSave, err := ValidateConfig(&a.config)
 	if err != nil {
-		slog.Warn("failed to get monitors for validation", "error", err)
-	} else if len(monitors) > 0 {
-		if a.config.DisplayIndex >= len(monitors) || a.config.DisplayIndex < 0 {
-			slog.Warn("invalid display index in config, resetting to 0", "configured", a.config.DisplayIndex, "available", len(monitors))
-			a.config.DisplayIndex = 0
-			needsSave = true
-		}
-	}
-
-	// Validate audio devices
-	devices, err := ListAudioDevices()
-	if err != nil {
-		slog.Warn("failed to get audio devices for validation", "error", err)
-	} else {
-		inputCount := 0
-		outputCount := 0
-		for _, d := range devices {
-			if d.IsInput {
-				inputCount++
-			} else {
-				outputCount++
-			}
-		}
-
-		// Validate microphone device
-		if a.config.MicrophoneDevice >= inputCount {
-			slog.Warn("invalid microphone device in config, disabling", "configured", a.config.MicrophoneDevice, "available", inputCount)
-			a.config.MicrophoneDevice = -1
-			needsSave = true
-		}
-
-		// Validate system audio device
-		if a.config.SystemAudioDevice >= outputCount {
-			slog.Warn("invalid system audio device in config, disabling", "configured", a.config.SystemAudioDevice, "available", outputCount)
-			a.config.SystemAudioDevice = -1
-			needsSave = true
-		}
+		return err
 	}
 
 	if needsSave {
@@ -306,15 +230,9 @@ func (a *App) UpdateConfig(cfg Config) error {
 		return fmt.Errorf("cannot change config while recording")
 	}
 
-	// Validate configuration
-	if cfg.FPS <= 0 || cfg.FPS > MaxFPS {
-		return fmt.Errorf("FPS must be between 1 and %d", MaxFPS)
-	}
-	if cfg.RecordSeconds <= 0 {
-		return fmt.Errorf("record seconds must be positive")
-	}
-	if cfg.SegmentDurationSec != 2 && cfg.SegmentDurationSec != 5 && cfg.SegmentDurationSec != 10 {
-		return fmt.Errorf("segment duration must be 2, 5, or 10 seconds")
+	// Validate configuration values
+	if err := ValidateConfigValues(cfg); err != nil {
+		return err
 	}
 
 	a.config = cfg
