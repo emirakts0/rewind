@@ -113,7 +113,9 @@ pub fn start_replay_buffer(
         ffmpeg_path: config.ffmpeg_path.clone(),
     })?);
 
-    let audio_buffer_duration = (config.buffer_duration_secs as f64 * 1.2) as u64;
+    let segment_margin = config.segment_duration_secs * 2;
+    let percent_margin = (config.buffer_duration_secs as f64 * 0.2) as u64;
+    let audio_buffer_duration = config.buffer_duration_secs + segment_margin.max(percent_margin);
     let mic_audio_buffer = Arc::new(Mutex::new(CircularAudioBuffer::new(
         Duration::from_secs(audio_buffer_duration),
         config.audio.sample_rate,

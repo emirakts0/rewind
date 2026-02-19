@@ -32,6 +32,7 @@ struct SegmentInfo {
     wall_start: Instant,
     wall_end: Instant,
     file_size: u64,
+    saving: bool,
 }
 
 pub struct ReplayBuffer {
@@ -103,15 +104,20 @@ impl ReplayBuffer {
             wall_start,
             wall_end,
             file_size,
+            saving: false,
         });
 
         *total_dur += duration_secs;
         *total_disk += file_size;
 
-        while *total_dur > self.config.buffer_duration_secs as f64 {
-            if let Some(old_segment) = segments.pop_front() {
+        let active_dur: f64 = segments.iter().filter(|s| !s.saving).map(|s| s.duration_secs).sum();
+        let mut excess = active_dur - self.config.buffer_duration_secs as f64;
+        while excess > 0.0 {
+            if let Some(pos) = segments.iter().position(|s| !s.saving) {
+                let old_segment = segments.remove(pos).unwrap();
                 *total_dur -= old_segment.duration_secs;
                 *total_disk = total_disk.saturating_sub(old_segment.file_size);
+                excess -= old_segment.duration_secs;
                 let _ = fs::remove_file(&old_segment.path);
             } else {
                 break;
@@ -146,6 +152,10 @@ impl ReplayBuffer {
             timeout_duration,
         );
         
+        if result.is_err() {
+            self.unmark_saving_segments();
+        }
+
         result
     }
 
@@ -161,20 +171,38 @@ impl ReplayBuffer {
         start_time: Instant,
         timeout_duration: std::time::Duration,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let (segment_paths, video_wall_start, video_wall_end, seg_count, total_dur) = {
-            let segments = self.segments.lock().unwrap();
+        let (segment_paths, video_wall_start, video_wall_end, seg_count, total_dur, mic_data, speaker_data) = {
+            let mut segments = self.segments.lock().unwrap();
 
             if segments.is_empty() {
                 return Err("No segments available to save".into());
             }
 
-            let paths: Vec<PathBuf> = segments.iter().map(|s| s.path.clone()).collect();
-            let wall_start = segments.front().unwrap().wall_start;
-            let wall_end = segments.back().unwrap().wall_end;
-            let count = segments.len();
-            let dur = *self.total_duration.lock().unwrap();
+            // Mark all current segments as saving
+            for seg in segments.iter_mut() {
+                seg.saving = true;
+            }
 
-            (paths, wall_start, wall_end, count, dur)
+            let paths: Vec<PathBuf> = segments.iter().filter(|s| s.saving).map(|s| s.path.clone()).collect();
+            let saving_segs: Vec<&SegmentInfo> = segments.iter().filter(|s| s.saving).collect();
+            let wall_start = saving_segs.first().unwrap().wall_start;
+            let wall_end = saving_segs.last().unwrap().wall_end;
+            let count = saving_segs.len();
+            let dur: f64 = saving_segs.iter().map(|s| s.duration_secs).sum();
+
+            let mic_snap = mic_audio_buffer.and_then(|buf| {
+                let buffer = buf.lock().ok()?;
+                let data = buffer.get_samples_from(wall_start);
+                if data.is_empty() { None } else { Some(data) }
+            });
+
+            let speaker_snap = speaker_audio_buffer.and_then(|buf| {
+                let buffer = buf.lock().ok()?;
+                let data = buffer.get_samples_from(wall_start);
+                if data.is_empty() { None } else { Some(data) }
+            });
+
+            (paths, wall_start, wall_end, count, dur, mic_snap, speaker_snap)
         };
 
         log::info!("Saving replay buffer...");
@@ -211,30 +239,9 @@ impl ReplayBuffer {
             return Err("Save operation timed out (45s limit exceeded)".into());
         }
 
-        // Calculate video duration from segments
         let video_duration = total_dur;
 
         let bpf = (audio_channels as usize) * 2;
-
-        let mic_data = mic_audio_buffer.and_then(|buf| {
-            let buffer = buf.lock().ok()?;
-            let data = buffer.get_samples_from(video_wall_start);
-            if data.is_empty() {
-                None
-            } else {
-                Some(data)
-            }
-        });
-
-        let speaker_data = speaker_audio_buffer.and_then(|buf| {
-            let buffer = buf.lock().ok()?;
-            let data = buffer.get_samples_from(video_wall_start);
-            if data.is_empty() {
-                None
-            } else {
-                Some(data)
-            }
-        });
 
         let has_audio = mic_data.is_some() || speaker_data.is_some();
 
@@ -250,7 +257,6 @@ impl ReplayBuffer {
                 log::info!("Speaker audio: {:.2}s", dur);
             }
 
-            // Helper function to apply volume to audio data
             let apply_volume = |data: &[u8], volume: f32| -> Vec<u8> {
                 let frames = data.len() / bpf;
                 let mut processed = Vec::with_capacity(data.len());
@@ -310,7 +316,6 @@ impl ReplayBuffer {
                 (None, None) => unreachable!(),
             };
 
-            // Trim/pad audio to match video duration
             let target_samples = (video_duration * audio_sample_rate as f64) as usize;
             let target_bytes = target_samples * bpf;
 
@@ -449,8 +454,44 @@ impl ReplayBuffer {
 
         log::info!("Saved to: {}", output_path.display());
 
-        self.clear()?;
-        log::info!("   Video segments cleared, ready for new recording");
+        self.remove_saved_segments()?;
+        log::info!("   Saved segments removed, buffer continues with remaining segments");
+
+        Ok(())
+    }
+
+    fn unmark_saving_segments(&self) {
+        if let Ok(mut segments) = self.segments.lock() {
+            for seg in segments.iter_mut() {
+                seg.saving = false;
+            }
+        }
+        log::info!("Save failed, segments unmarked and returned to buffer");
+    }
+
+    fn remove_saved_segments(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let mut segments = self.segments.lock().unwrap();
+        let mut total_dur = self.total_duration.lock().unwrap();
+        let mut total_disk = self.total_disk_usage.lock().unwrap();
+
+        let mut remaining = VecDeque::new();
+        for segment in segments.drain(..) {
+            if segment.saving {
+                *total_dur -= segment.duration_secs;
+                *total_disk = total_disk.saturating_sub(segment.file_size);
+                let _ = fs::remove_file(&segment.path);
+            } else {
+                remaining.push_back(segment);
+            }
+        }
+
+        *segments = remaining;
+
+        log::info!(
+            "Removed saved segments, {} segments remain ({:.1}s)",
+            segments.len(),
+            *total_dur
+        );
 
         Ok(())
     }
