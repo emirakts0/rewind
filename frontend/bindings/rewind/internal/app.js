@@ -129,14 +129,6 @@ export function OpenOutputDirectory() {
 }
 
 /**
- * RefreshConfig reloads devices and validates config
- * @returns {$CancellablePromise<void>}
- */
-export function RefreshConfig() {
-    return $Call.ByID(1730007912);
-}
-
-/**
  * SaveCurrentClip saves the replay buffer to a file
  * @returns {$CancellablePromise<string>}
  */

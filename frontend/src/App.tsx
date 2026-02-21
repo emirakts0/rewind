@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Save, Square, HardDrive } from 'lucide-react'
-import { api, type DisplayInfo, type Config, type State } from '@/lib/wails'
+import { api, type DisplayInfo, type Config, type State, Events } from '@/lib/wails'
 import { formatTime, formatBufferDisplay, getBufferUnit, formatError, cn } from '@/lib/utils'
 
 import { Button } from '@/components/ui/button'
@@ -20,13 +20,16 @@ function App() {
     const [outputDevices, setOutputDevices] = useState<string[]>([])
     const [config, setConfig] = useState<Config>({
         displayIndex: 0,
+        monitorName: '',
         fps: 30,
         bitrate: 15,
         recordSeconds: 30,
         segmentDurationSec: 5,
         outputDir: './clips',
         microphoneDevice: -1,
+        microphoneName: '',
         systemAudioDevice: -1,
+        systemAudioName: '',
         microphoneVolume: 100,
         systemAudioVolume: 100,
         showCursor: true,
@@ -41,25 +44,21 @@ function App() {
     })
     const [loading, setLoading] = useState(true)
     const [configOpen, setConfigOpen] = useState(false)
-    
+
     const isRecording = state.status === 'recording' || state.status === 'saving'
-    
-    // Calculate estimate based on current config (for UI updates before recording starts)
+
     const calculateEstimate = (cfg: Config) => {
         const actualBufferSeconds = cfg.recordSeconds + cfg.segmentDurationSec
-        const diskMB = (cfg.bitrate * actualBufferSeconds) / 8
-        return diskMB
+        return (cfg.bitrate * actualBufferSeconds) / 8
     }
-    
-    const estimateDiskDisplay = isRecording
+
+    const estimateDiskDisplay = `${calculateEstimate(config).toFixed(0)}MB`
+
+    const actualDiskDisplay = state.diskUsageMB > 0
         ? `${state.diskUsageMB.toFixed(1)}MB`
-        : `${calculateEstimate(config).toFixed(0)}MB`
-    
-    const actualDiskDisplay = state.diskUsageMB > 0 
-        ? `${state.diskUsageMB.toFixed(1)}MB` 
         : "0MB"
-    const actualMemoryDisplay = state.memoryUsageMB > 0 
-        ? `${state.memoryUsageMB.toFixed(1)}MB` 
+    const actualMemoryDisplay = state.memoryUsageMB > 0
+        ? `${state.memoryUsageMB.toFixed(1)}MB`
         : "0MB"
 
     useEffect(() => {
@@ -79,11 +78,14 @@ function App() {
                 const nearestStep = BUFFER_STEPS.reduce((prev, curr) =>
                     Math.abs(curr - c.recordSeconds) < Math.abs(prev - c.recordSeconds) ? curr : prev
                 )
-                setConfig({ 
-                    ...c, 
+                setConfig({
+                    ...c,
                     recordSeconds: nearestStep,
                     microphoneVolume: c.microphoneVolume ?? 100,
                     systemAudioVolume: c.systemAudioVolume ?? 100,
+                    monitorName: c.monitorName || '',
+                    microphoneName: c.microphoneName || '',
+                    systemAudioName: c.systemAudioName || '',
                 })
 
                 if (s) {
@@ -99,9 +101,8 @@ function App() {
     }, [])
 
     useEffect(() => {
-        const unsubState = api.Events.On('state-changed', (event: any) => {
+        const unsubState = api.Events.On(Events.STATE_CHANGED, (event: any) => {
             const s = event.data as State
-            console.log("State changed:", s)
             setState(s)
 
             if (s.status === 'recording' && configOpen) {
@@ -109,10 +110,8 @@ function App() {
             }
         })
 
-        const unsubRuntimeError = api.Events.On('runtime-error', (event: any) => {
+        const unsubRuntimeError = api.Events.On(Events.RUNTIME_ERROR, (event: any) => {
             const { level, message } = event.data as { level: string; message: string }
-            console.log("Runtime error:", level, message)
-            
             if (level === 'error') {
                 toast.error(message, {
                     description: "Recording error",
@@ -126,9 +125,42 @@ function App() {
             }
         })
 
+        const unsubDeviceDisconnected = api.Events.On(Events.DEVICE_DISCONNECTED, (event: any) => {
+            const { message } = event.data as { message: string }
+            toast.error(message, {
+                description: "Recording stopped",
+                duration: 6000,
+            })
+        })
+
+        const unsubDeviceListChanged = api.Events.On(Events.DEVICE_LIST_CHANGED, async () => {
+            try {
+                const [displays, inputs, outputs, cfg] = await Promise.all([
+                    api.getDisplays(),
+                    api.getInputDevices(),
+                    api.getOutputDevices(),
+                    api.getConfig()
+                ])
+
+                setDisplays(displays || [])
+                setInputDevices(inputs || [])
+                setOutputDevices(outputs || [])
+                setConfig(prev => ({ ...prev, ...cfg }))
+
+                toast.info("Device configuration updated", {
+                    description: "A device was connected or disconnected",
+                    duration: 3000,
+                })
+            } catch (err: any) {
+                console.error("Failed to refresh devices:", err)
+            }
+        })
+
         return () => {
             unsubState()
             unsubRuntimeError()
+            unsubDeviceDisconnected()
+            unsubDeviceListChanged()
         }
     }, [configOpen])
 
@@ -205,7 +237,6 @@ function App() {
 
     const handleRefreshDevices = useCallback(async () => {
         try {
-            await api.refreshConfig()
 
             const [displays, inputs, outputs, cfg] = await Promise.all([
                 api.getDisplays(),
@@ -213,12 +244,12 @@ function App() {
                 api.getOutputDevices(),
                 api.getConfig()
             ])
-            
+
             setDisplays(displays || [])
             setInputDevices(inputs || [])
             setOutputDevices(outputs || [])
             setConfig(prev => ({ ...prev, ...cfg }))
-            
+
             toast.success("Config refreshed")
         } catch (err: any) {
             console.error("Config refresh error:", err)
@@ -237,8 +268,8 @@ function App() {
     return (
         <div className="h-screen w-screen bg-transparent flex flex-col overflow-hidden select-none font-sans text-foreground relative">
             <TitleBar>
-                <StatusBadge 
-                    status={isRecording ? 'recording' : 'idle'} 
+                <StatusBadge
+                    status={isRecording ? 'recording' : 'idle'}
                     timer={isRecording ? formatTime(state.recordingFor) : undefined}
                 />
                 <ClipsDrawer />
@@ -271,8 +302,8 @@ function App() {
                     <Badge variant="outline" className="gap-1.5 px-3 py-1 bg-secondary/30 backdrop-blur-sm border-border/50">
                         <HardDrive className="w-3 h-3" />
                         <span className="font-normal opacity-80">
-                            {isRecording 
-                                ? `Disk: ${actualDiskDisplay} • RAM: ${actualMemoryDisplay}` 
+                            {isRecording
+                                ? `Disk: ${actualDiskDisplay} • RAM: ${actualMemoryDisplay}`
                                 : `Est. Disk: ${estimateDiskDisplay}`
                             }
                         </span>

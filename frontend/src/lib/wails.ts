@@ -9,13 +9,16 @@ export interface DisplayInfo {
 
 export interface Config {
     displayIndex: number
+    monitorName: string
     fps: number
     bitrate: number
     recordSeconds: number
     segmentDurationSec: number
     outputDir: string
     microphoneDevice: number
+    microphoneName: string
     systemAudioDevice: number
+    systemAudioName: string
     microphoneVolume: number
     systemAudioVolume: number
     showCursor: boolean
@@ -38,8 +41,16 @@ export interface State {
     memoryUsageMB: number
 }
 
+export const Events = {
+    STATE_CHANGED: 'state-changed',
+    CLIPS_UPDATED: 'clips-updated',
+    DEVICE_LIST_CHANGED: 'device-list-changed',
+    DEVICE_DISCONNECTED: 'device-disconnected',
+    RUNTIME_ERROR: 'runtime-error',
+} as const
+
 import { App as AppBindings } from '../../bindings/rewind/internal'
-import { Events } from "@wailsio/runtime"
+import { Events as WailsEvents } from "@wailsio/runtime"
 
 export const api = {
     async getDisplays(): Promise<DisplayInfo[]> {
@@ -102,19 +113,9 @@ export const api = {
         return AppBindings.ListAudioOutputDevices()
     },
 
-    async refreshConfig(): Promise<void> {
-        return AppBindings.RefreshConfig()
-    },
-
     Events: {
         On: (eventName: string, callback: (data: any) => void) => {
-            return Events.On(eventName, callback)
-        },
-        Off: (eventName: string) => {
-            return Events.Off(eventName)
-        },
-        Emit: (eventName: string, data?: any) => {
-            return Events.Emit(eventName, data)
+            return WailsEvents.On(eventName, callback)
         }
     }
 }

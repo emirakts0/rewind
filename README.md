@@ -35,6 +35,7 @@ Rewind continuously captures your screen in the background and lets you save the
 - **Instant Replay** - Capture the last N seconds of screen activity with a single keystroke
 - **Hardware Acceleration** - Native Windows Graphics Capture API with GPU encoding (H264)
 - **Audio Capture** - Record system audio and microphone simultaneously with independent volume controls
+- **Device Monitoring** - Automatically detects and handles monitor/audio device changes without polling
 - **System Tray Integration** - Runs silently in the background with quick access via tray icon
 - **Global Hotkeys** - Control recording without leaving your current application
 - **Configurable Quality** - Adjustable FPS, bitrate, and buffer duration
@@ -126,9 +127,19 @@ Rewind uses a circular buffer approach with native Windows capture:
 - **Rust Capture Engine**: Uses Windows Graphics Capture API for zero-copy GPU frame capture
 - **Video Encoder**: Hardware-accelerated H264 encoding via Windows Media Foundation
 - **Audio Capture**: CPAL-based microphone and loopback recording with circular buffers
+- **Device Monitor**: Windows WM_DEVICECHANGE message loop for real-time device change detection
 - **Segment Manager**: Maintains rolling window of N-second video segments
 - **Go Application Layer**: Orchestrates capture, manages UI, and handles user interactions
 - **FFmpeg Integration**: Concatenates segments and muxes audio on save
+
+### Device Change Handling
+
+The application monitors device changes in real-time using Windows device notifications:
+
+- **Idle State**: When a monitor or audio device is removed, the configuration is automatically validated and updated
+- **Recording State**: If the currently recording monitor or audio device is disconnected, recording stops automatically with a notification
+- **No Polling**: Uses native Windows `WM_DEVICECHANGE` messages for efficient, event-driven monitoring
+- **Frontend Updates**: Device list changes trigger automatic UI refresh
 
 ## License
 

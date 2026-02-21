@@ -199,6 +199,18 @@ func GetMonitors() ([]MonitorInfo, error) {
 	if err := json.Unmarshal(*result.Data, &monitors); err != nil {
 		return nil, fmt.Errorf("failed to parse monitors data: %v", err)
 	}
+
+	// Format monitor names
+	for i := range monitors {
+		baseName := monitors[i].Name
+		if baseName == "" {
+			baseName = fmt.Sprintf("Display %d", i+1)
+		}
+
+		monitors[i].Name = fmt.Sprintf("%s (%dx%d)", baseName, monitors[i].Width, monitors[i].Height)
+	}
+
+	slog.Info("monitors listed", "count", len(monitors))
 	return monitors, nil
 }
 
@@ -236,6 +248,8 @@ func ListAudioDevices() ([]AudioDeviceInfo, error) {
 	if err := json.Unmarshal(*result.Data, &devices); err != nil {
 		return nil, fmt.Errorf("failed to parse audio devices data: %v", err)
 	}
+
+	slog.Info("audio devices listed", "count", len(devices))
 	return devices, nil
 }
 

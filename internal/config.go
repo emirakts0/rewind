@@ -2,10 +2,18 @@ package internal
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+)
+
+// Sentinel errors returned by ReconcileConfig when a configured device is absent.
+var (
+	ErrDisplayNotFound     = errors.New("configured display not found")
+	ErrMicNotFound         = errors.New("configured microphone not found")
+	ErrSystemAudioNotFound = errors.New("configured system audio device not found")
 )
 
 const configFileName = "settings.json"
@@ -13,13 +21,16 @@ const configFileName = "settings.json"
 // Config represents the application configuration
 type Config struct {
 	DisplayIndex       int    `json:"displayIndex"`
+	MonitorName        string `json:"monitorName"` // resolved name of DisplayIndex
 	FPS                int    `json:"fps"`
 	Bitrate            int    `json:"bitrate"`
 	RecordSeconds      int    `json:"recordSeconds"`
 	SegmentDurationSec int    `json:"segmentDurationSec"`
 	OutputDir          string `json:"outputDir"`
 	MicrophoneDevice   int    `json:"microphoneDevice"`
+	MicrophoneName     string `json:"microphoneName"` // resolved name of MicrophoneDevice (-1 → "")
 	SystemAudioDevice  int    `json:"systemAudioDevice"`
+	SystemAudioName    string `json:"systemAudioName"` // resolved name of SystemAudioDevice (-1 → "")
 	MicrophoneVolume   int    `json:"microphoneVolume"`
 	SystemAudioVolume  int    `json:"systemAudioVolume"`
 	ShowCursor         bool   `json:"showCursor"`
@@ -108,73 +119,97 @@ func saveConfigToFile(cfg Config) error {
 	return nil
 }
 
-// ValidateConfig checks if config values are valid and fixes them if needed
-func ValidateConfig(cfg *Config) (bool, error) {
-	needsSave := false
+// ReconcileConfig aligns configured device names with current hardware.
+// Missing devices are reset to defaults and their sentinel errors are returned
+func ReconcileConfig(cfg *Config) error {
+	var reconcileErr error
 
-	// Validate monitor index
+	// Validate monitor
 	monitors, err := GetMonitors()
-	if err != nil {
-		slog.Warn("failed to get monitors for validation", "error", err)
-	} else if len(monitors) > 0 {
-		if cfg.DisplayIndex >= len(monitors) || cfg.DisplayIndex < 0 {
-			slog.Warn("invalid display index in config, resetting to 0", "configured", cfg.DisplayIndex, "available", len(monitors))
-			cfg.DisplayIndex = 0
-			needsSave = true
+	if err == nil && len(monitors) > 0 {
+		newIndex := 0
+		newName := monitors[0].Name
+
+		for i, m := range monitors {
+			if m.Name == cfg.MonitorName {
+				newIndex = i
+				newName = m.Name
+				break
+			}
+		}
+
+		if cfg.DisplayIndex != newIndex || cfg.MonitorName != newName {
+			if cfg.MonitorName != "" && cfg.MonitorName != newName {
+				slog.Warn("configured monitor missing, resetting to primary", "configured", cfg.MonitorName)
+				reconcileErr = ErrDisplayNotFound
+			}
+			cfg.DisplayIndex = newIndex
+			cfg.MonitorName = newName
 		}
 	}
 
 	// Validate audio devices
 	devices, err := ListAudioDevices()
-	if err != nil {
-		slog.Warn("failed to get audio devices for validation", "error", err)
-	} else {
-		inputCount := 0
-		outputCount := 0
+	if err == nil {
+		var inputs, outputs []AudioDeviceInfo
 		for _, d := range devices {
 			if d.IsInput {
-				inputCount++
+				inputs = append(inputs, d)
 			} else {
-				outputCount++
+				outputs = append(outputs, d)
 			}
 		}
 
-		// Validate microphone device
-		if cfg.MicrophoneDevice >= inputCount {
-			slog.Warn("invalid microphone device in config, disabling", "configured", cfg.MicrophoneDevice, "available", inputCount)
-			cfg.MicrophoneDevice = -1
-			needsSave = true
+		// Microphone
+		newMicIndex := -1
+		newMicName := ""
+		if cfg.MicrophoneName != "" {
+			for i, d := range inputs {
+				if d.Name == cfg.MicrophoneName {
+					newMicIndex = i
+					newMicName = d.Name
+					break
+				}
+			}
+			if newMicIndex == -1 {
+				slog.Warn("configured microphone missing, disabling", "configured", cfg.MicrophoneName)
+				reconcileErr = ErrMicNotFound
+			}
+		}
+		if cfg.MicrophoneDevice != newMicIndex || cfg.MicrophoneName != newMicName {
+			cfg.MicrophoneDevice = newMicIndex
+			cfg.MicrophoneName = newMicName
 		}
 
-		// Validate system audio device
-		if cfg.SystemAudioDevice >= outputCount {
-			slog.Warn("invalid system audio device in config, disabling", "configured", cfg.SystemAudioDevice, "available", outputCount)
-			cfg.SystemAudioDevice = -1
-			needsSave = true
+		// System Audio
+		newSpeakerIndex := -1
+		newSpeakerName := ""
+		if cfg.SystemAudioName != "" {
+			for i, d := range outputs {
+				if d.Name == cfg.SystemAudioName {
+					newSpeakerIndex = i
+					newSpeakerName = d.Name
+					break
+				}
+			}
+			if newSpeakerIndex == -1 {
+				slog.Warn("configured system audio missing, disabling", "configured", cfg.SystemAudioName)
+				reconcileErr = ErrSystemAudioNotFound
+			}
+		}
+		if cfg.SystemAudioDevice != newSpeakerIndex || cfg.SystemAudioName != newSpeakerName {
+			cfg.SystemAudioDevice = newSpeakerIndex
+			cfg.SystemAudioName = newSpeakerName
 		}
 	}
 
-	return needsSave, nil
-}
-
-// ValidateAndFixConfig checks if config values are valid and fixes them if needed
-func ValidateAndFixConfig(cfg *Config) error {
-	needsSave, err := ValidateConfig(cfg)
-	if err != nil {
+	if err := saveConfigToFile(*cfg); err != nil {
+		slog.Warn("failed to save reconciled config", "error", err)
 		return err
 	}
+	slog.Info("config reconciliation complete")
 
-	if needsSave {
-		if err := saveConfigToFile(*cfg); err != nil {
-			slog.Warn("failed to save corrected config", "error", err)
-			return err
-		}
-		slog.Info("config validated and corrected")
-	} else {
-		slog.Info("config validation passed")
-	}
-
-	return nil
+	return reconcileErr
 }
 
 // ValidateConfigValues validates configuration values for business rules

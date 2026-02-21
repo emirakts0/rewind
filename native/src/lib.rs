@@ -27,10 +27,8 @@ struct MonitorsResult {
 
 #[no_mangle]
 pub extern "C" fn rewind_get_monitors() -> *mut c_char {
-    log::debug!("Getting monitor list");
     let result = match list_monitors() {
         Ok(m) => {
-            log::info!("Found {} monitors", m.len());
             MonitorsResult {
                 success: true,
                 data: serde_json::to_value(&m).ok(),
@@ -60,10 +58,8 @@ struct AudioDevicesResult {
 
 #[no_mangle]
 pub extern "C" fn rewind_list_audio_devices() -> *mut c_char {
-    log::debug!("Listing audio devices");
     let result = match list_audio_devices() {
         Ok(d) => {
-            log::info!("Found {} audio devices", d.len());
             AudioDevicesResult {
                 success: true,
                 data: serde_json::to_value(&d).ok(),

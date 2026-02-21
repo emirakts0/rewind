@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from "framer-motion"
 import { FolderOpen, FileVideo, Clock, RefreshCcw, ArrowLeft, ExternalLink, Trash2, CheckCircle2, Circle } from 'lucide-react'
-import { api, type Clip } from '@/lib/wails'
+import { api, type Clip, Events } from '@/lib/wails'
 import { cn, formatBytes } from '@/lib/utils'
 
 import {
@@ -29,7 +29,6 @@ export function ClipsDrawer() {
         setLoading(true)
         try {
             const data = await api.getClips()
-            // Sort by modTime desc (newest first)
             const sorted = (data || []).sort((a, b) =>
                 new Date(b.modTime).getTime() - new Date(a.modTime).getTime()
             )
@@ -47,15 +46,13 @@ export function ClipsDrawer() {
             toast.dismiss()
             fetchClips()
         } else {
-            // Reset selection when drawer closes
             setSelectionMode(false)
             setSelectedClips(new Set())
         }
     }, [open])
 
-    // Listen for clips-updated event
     useEffect(() => {
-        const unsub = api.Events.On('clips-updated', () => {
+        const unsub = api.Events.On(Events.CLIPS_UPDATED, () => {
             if (open) {
                 fetchClips()
             }
@@ -254,62 +251,61 @@ export function ClipsDrawer() {
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                                 <AnimatePresence mode="popLayout" initial={false}>
                                     {clips.map((clip) => {
-                                    const isSelected = selectedClips.has(clip.path)
-                                    return (
-                                        <motion.button
-                                            key={clip.path}
-                                            layout
-                                            initial={{ opacity: 0, scale: 0.8, y: 20 }}
-                                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                                            exit={{ opacity: 0, scale: 0.8, y: -10 }}
-                                            transition={{
-                                                opacity: { duration: 0.25 },
-                                                scale: { duration: 0.4, type: "spring", stiffness: 200, damping: 20 },
-                                                y: { duration: 0.4, type: "spring", stiffness: 200, damping: 20 },
-                                                layout: { duration: 0.5, type: "spring", stiffness: 150, damping: 25 }
-                                            }}
-                                            onClick={() => selectionMode ? toggleSelection(clip.path) : handleOpenClip(clip.path)}
-                                            className={cn(
-                                                "group relative flex items-center gap-3 p-3 rounded-lg border transition-colors duration-300 text-left",
-                                                selectionMode
-                                                    ? isSelected
-                                                        ? "border-primary bg-primary/10"
-                                                        : "border-border/40 bg-card/50 hover:bg-accent/30"
-                                                    : "border-border/40 bg-card/50 hover:bg-accent/50"
-                                            )}
-                                        >
-                                            {selectionMode && (
-                                                <div className="absolute top-2 right-2 z-10">
-                                                    {isSelected ? (
-                                                        <CheckCircle2 className="h-5 w-5 text-primary" />
-                                                    ) : (
-                                                        <Circle className="h-5 w-5 text-muted-foreground/50" />
-                                                    )}
+                                        const isSelected = selectedClips.has(clip.path)
+                                        return (
+                                            <motion.button
+                                                key={clip.path}
+                                                layout
+                                                initial={{ opacity: 0, scale: 0.8, y: 20 }}
+                                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                                exit={{ opacity: 0, scale: 0.8, y: -10 }}
+                                                transition={{
+                                                    opacity: { duration: 0.25 },
+                                                    scale: { duration: 0.4, type: "spring", stiffness: 200, damping: 20 },
+                                                    y: { duration: 0.4, type: "spring", stiffness: 200, damping: 20 },
+                                                    layout: { duration: 0.5, type: "spring", stiffness: 150, damping: 25 }
+                                                }}
+                                                onClick={() => selectionMode ? toggleSelection(clip.path) : handleOpenClip(clip.path)}
+                                                className={cn(
+                                                    "group relative flex items-center gap-3 p-3 rounded-lg border transition-colors duration-300 text-left",
+                                                    selectionMode
+                                                        ? isSelected
+                                                            ? "border-primary bg-primary/10"
+                                                            : "border-border/40 bg-card/50 hover:bg-accent/30"
+                                                        : "border-border/40 bg-card/50 hover:bg-accent/50"
+                                                )}
+                                            >
+                                                {selectionMode && (
+                                                    <div className="absolute top-2 right-2 z-10">
+                                                        {isSelected ? (
+                                                            <CheckCircle2 className="h-5 w-5 text-primary" />
+                                                        ) : (
+                                                            <Circle className="h-5 w-5 text-muted-foreground/50" />
+                                                        )}
+                                                    </div>
+                                                )}
+                                                <div className="h-10 w-10 rounded-md bg-secondary/50 flex items-center justify-center shrink-0">
+                                                    <FileVideo className="h-5 w-5 text-primary" />
                                                 </div>
-                                            )}
-                                            <div className="h-10 w-10 rounded-md bg-secondary/50 flex items-center justify-center shrink-0">
-                                                <FileVideo className="h-5 w-5 text-primary" />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-medium text-sm truncate">{clip.name}</p>
-                                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground/80 mt-0.5">
-                                                    <span className="flex items-center gap-1 bg-background/50 px-1.5 py-0.5 rounded">
-                                                        <Clock className="w-2.5 h-2.5" />
-                                                        {new Date(clip.modTime).toLocaleString()}
-                                                    </span>
-                                                    <span className="font-mono">{formatBytes(clip.size)}</span>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-medium text-sm truncate">{clip.name}</p>
+                                                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground/80 mt-0.5">
+                                                        <span className="flex items-center gap-1 bg-background/50 px-1.5 py-0.5 rounded">
+                                                            <Clock className="w-2.5 h-2.5" />
+                                                            {new Date(clip.modTime).toLocaleString()}
+                                                        </span>
+                                                        <span className="font-mono">{formatBytes(clip.size)}</span>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </motion.button>
-                                    )
-                                })}
-                            </AnimatePresence>
+                                            </motion.button>
+                                        )
+                                    })}
+                                </AnimatePresence>
                             </div>
                         </div>
                     )}
                 </ScrollArea>
 
-                {/* Delete Confirmation Overlay */}
                 <AnimatePresence>
                     {showDeleteConfirm && (
                         <motion.div

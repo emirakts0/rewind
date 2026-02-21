@@ -25,6 +25,13 @@ const (
 
 	// Error handling
 	CriticalErrorDelay = 100 * time.Millisecond
+
+	// Event names
+	EventStateChanged       = "state-changed"
+	EventClipsUpdated       = "clips-updated"
+	EventDeviceListChanged  = "device-list-changed"
+	EventDeviceDisconnected = "device-disconnected"
+	EventRuntimeError       = "runtime-error"
 )
 
 // Valid segment durations in seconds

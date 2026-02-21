@@ -94,10 +94,6 @@ impl AudioCapture {
             (device, true)
         };
 
-        if let Ok(desc) = device.description() {
-            log::info!("Using audio device: {}", desc.name());
-        }
-
         let stream_config = StreamConfig {
             channels: config.channels,
             sample_rate: config.sample_rate,
@@ -240,7 +236,7 @@ impl CircularAudioBuffer {
             if wall_time > last_end {
                 let gap = wall_time.duration_since(last_end);
                 if gap > Duration::from_millis(50) {
-                    log::warn!(
+                    log::debug!(
                         "Audio gap detected: {:.3}s (sleep or device pause)",
                         gap.as_secs_f64()
                     );
@@ -250,8 +246,7 @@ impl CircularAudioBuffer {
 
         // Update last_chunk_end_time based on current chunk
         let chunk_frames = aligned_len / bpf;
-        let chunk_duration =
-            Duration::from_secs_f64(chunk_frames as f64 / self.sample_rate as f64);
+        let chunk_duration = Duration::from_secs_f64(chunk_frames as f64 / self.sample_rate as f64);
         self.last_chunk_end_time = Some(wall_time + chunk_duration);
 
         self.current_bytes += aligned_len;
@@ -346,8 +341,7 @@ impl CircularAudioBuffer {
 
                     if cumulative_drift > 0.0 && drift_duration >= drift_correction_threshold {
                         // Positive drift: chunks arriving late, insert silence to keep sync
-                        let silence_frames =
-                            (cumulative_drift * self.sample_rate as f64) as usize;
+                        let silence_frames = (cumulative_drift * self.sample_rate as f64) as usize;
                         let silence_bytes = silence_frames * bpf;
                         if silence_bytes > 0 {
                             log::debug!(
@@ -357,8 +351,7 @@ impl CircularAudioBuffer {
                             result.resize(result.len() + silence_bytes, 0);
                         }
                         cumulative_drift = 0.0;
-                    } else if cumulative_drift < 0.0
-                        && drift_duration >= drift_correction_threshold
+                    } else if cumulative_drift < 0.0 && drift_duration >= drift_correction_threshold
                     {
                         // Negative drift: chunks overlapping, skip leading samples
                         let skip_frames =
@@ -381,10 +374,7 @@ impl CircularAudioBuffer {
         }
 
         if cumulative_drift.abs() > 0.01 {
-            log::info!(
-                "Audio: final uncorrected drift: {:.3}s",
-                cumulative_drift
-            );
+            log::info!("Audio: final uncorrected drift: {:.3}s", cumulative_drift);
         }
 
         let aligned = (result.len() / bpf) * bpf;

@@ -30,7 +30,7 @@ import { Slider } from "@/components/ui/slider"
 import { cn } from '@/lib/utils'
 import type { Config, DisplayInfo } from '@/lib/wails'
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 
 interface ConfigPanelProps {
     open: boolean
@@ -45,8 +45,7 @@ interface ConfigPanelProps {
     onRefreshDevices: () => void
 }
 
-// Standard FPS options
-const STANDARD_FPS = [60, 30]
+const FPS_OPTIONS = [60, 30]
 
 export function ConfigPanel({
     open,
@@ -60,27 +59,6 @@ export function ConfigPanel({
     onSelectDirectory,
     onRefreshDevices
 }: ConfigPanelProps) {
-    // Get current display's refresh rate
-    const selectedDisplay = displays.find(d => d.index === config.displayIndex)
-    const maxHz = selectedDisplay?.refreshRate || 60
-
-    // Build FPS options: native Hz + standard options below it
-    const fpsOptions = useMemo(() => {
-        const options = new Set<number>()
-        options.add(maxHz)
-        STANDARD_FPS.forEach(fps => {
-            if (fps <= maxHz) options.add(fps)
-        })
-        return Array.from(options).sort((a, b) => b - a)
-    }, [maxHz])
-
-    // Ensure current FPS is valid for selected display
-    useMemo(() => {
-        if (config.fps > maxHz) {
-            setConfig(prev => ({ ...prev, fps: maxHz }))
-        }
-    }, [maxHz, config.fps, setConfig])
-
     return (
         <Collapsible open={open} onOpenChange={onOpenChange}>
             <Card className={cn("border-border/50 shadow-sm transition-all duration-300", disabled && "opacity-50 pointer-events-none")}>
@@ -119,7 +97,6 @@ export function ConfigPanel({
 
                 <CollapsibleContent>
                     <CardContent className="px-4 pb-0 pt-4 border-t border-border/40">
-                        {/* Output Directory */}
                         <div className="space-y-2 mb-4">
                             <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                                 <Folder className="w-3 h-3" /> Output Folder
@@ -145,14 +122,21 @@ export function ConfigPanel({
                                 <ScrollArea className="h-[280px] -mx-4 w-[calc(100%+2rem)]">
                                     <div className="space-y-3 px-4 py-2">
 
-                                        {/* Display Select */}
                                         <div className="space-y-1.5">
                                             <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                                                 <Monitor className="w-3 h-3" /> Display
                                             </label>
                                             <Select
                                                 value={config.displayIndex.toString()}
-                                                onValueChange={(v) => setConfig(prev => ({ ...prev, displayIndex: parseInt(v) }))}
+                                                onValueChange={(v) => {
+                                                    const idx = parseInt(v)
+                                                    const display = displays.find(d => d.index === idx)
+                                                    setConfig(prev => ({
+                                                        ...prev,
+                                                        displayIndex: idx,
+                                                        monitorName: display?.name || ''
+                                                    }))
+                                                }}
                                             >
                                                 <SelectTrigger className="h-9 bg-accent border-border/50 focus:ring-1 focus:ring-primary/20">
                                                     <SelectValue placeholder="Select display" />
@@ -160,14 +144,13 @@ export function ConfigPanel({
                                                 <SelectContent>
                                                     {displays.map(d => (
                                                         <SelectItem key={d.index} value={d.index.toString()}>
-                                                            {d.name || `Display ${d.index + 1}`} ({d.width}x{d.height}){d.isPrimary ? ' ★' : ''}
+                                                            {d.name}{d.isPrimary ? ' ★' : ''}
                                                         </SelectItem>
                                                     ))}
                                                 </SelectContent>
                                             </Select>
                                         </div>
 
-                                        {/* FPS & Quality */}
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-1.5">
                                                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
@@ -181,9 +164,9 @@ export function ConfigPanel({
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        {fpsOptions.map(fps => (
+                                                        {FPS_OPTIONS.map(fps => (
                                                             <SelectItem key={fps} value={fps.toString()}>
-                                                                {fps}{fps === maxHz ? ' (Native)' : ''}
+                                                                {fps} FPS
                                                             </SelectItem>
                                                         ))}
                                                     </SelectContent>
@@ -210,7 +193,6 @@ export function ConfigPanel({
                                             </div>
                                         </div>
 
-                                        {/* Segment Duration */}
                                         <div className="space-y-1.5">
                                             <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                                                 <Film className="w-3 h-3" /> Segment duration
@@ -251,7 +233,6 @@ export function ConfigPanel({
                                             </Select>
                                         </div>
 
-                                        {/* Cursor & Border */}
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="flex items-center justify-between px-3 py-2 rounded-md border border-border/30 bg-secondary/5">
                                                 <div className="flex items-center gap-2">
@@ -286,7 +267,6 @@ export function ConfigPanel({
                             <TabsContent value="audio" className="animate-in slide-in-from-right-2 duration-300 fade-in-0 mt-0">
                                 <ScrollArea className="h-[280px] -mx-4 w-[calc(100%+2rem)]">
                                     <div className="space-y-3 px-4 py-2">
-                                        {/* Audio Info Banner */}
                                         <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-muted/30 border border-border/30">
                                             <Info className="w-3.5 h-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
                                             <p className="text-[10px] text-muted-foreground leading-relaxed">
@@ -294,25 +274,31 @@ export function ConfigPanel({
                                             </p>
                                         </div>
 
-                                        {/* Microphone Selection */}
                                         <AudioDeviceSelector
                                             label="Microphone"
                                             icon={<Mic className="w-3 h-3" />}
                                             devices={inputDevices}
                                             selectedIndex={config.microphoneDevice}
-                                            onSelectDevice={(idx) => setConfig(prev => ({ ...prev, microphoneDevice: idx }))}
+                                            onSelectDevice={(idx, name) => setConfig(prev => ({
+                                                ...prev,
+                                                microphoneDevice: idx,
+                                                microphoneName: name
+                                            }))}
                                             volume={config.microphoneVolume}
                                             onVolumeChange={(vol) => setConfig(prev => ({ ...prev, microphoneVolume: vol }))}
                                             disabled={disabled}
                                         />
 
-                                        {/* System Audio Selection */}
                                         <AudioDeviceSelector
                                             label="System audio"
                                             icon={<Settings2 className="w-3 h-3" />}
                                             devices={outputDevices}
                                             selectedIndex={config.systemAudioDevice}
-                                            onSelectDevice={(idx) => setConfig(prev => ({ ...prev, systemAudioDevice: idx }))}
+                                            onSelectDevice={(idx, name) => setConfig(prev => ({
+                                                ...prev,
+                                                systemAudioDevice: idx,
+                                                systemAudioName: name
+                                            }))}
                                             volume={config.systemAudioVolume}
                                             onVolumeChange={(vol) => setConfig(prev => ({ ...prev, systemAudioVolume: vol }))}
                                             disabled={disabled}
@@ -328,7 +314,6 @@ export function ConfigPanel({
     )
 }
 
-// Audio Device Selector Component
 function AudioDeviceSelector({
     label,
     icon,
@@ -343,7 +328,7 @@ function AudioDeviceSelector({
     icon: React.ReactNode
     devices: string[]
     selectedIndex: number
-    onSelectDevice: (index: number) => void
+    onSelectDevice: (index: number, deviceName: string) => void
     volume: number
     onVolumeChange: (volume: number) => void
     disabled?: boolean
@@ -359,7 +344,11 @@ function AudioDeviceSelector({
             <div className="flex gap-2">
                 <Select
                     value={selectedIndex.toString()}
-                    onValueChange={(v) => onSelectDevice(parseInt(v))}
+                    onValueChange={(v) => {
+                        const idx = parseInt(v)
+                        const deviceName = idx >= 0 ? devices[idx] : ''
+                        onSelectDevice(idx, deviceName)
+                    }}
                     disabled={disabled}
                 >
                     <SelectTrigger className="h-9 bg-accent border-border/50 flex-1">

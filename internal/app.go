@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -47,6 +48,7 @@ type App struct {
 	lastSaveTime time.Time
 
 	onTrayStateChange func(State)
+	deviceMonitor     *DeviceMonitor
 }
 
 // New creates a new App instance
@@ -113,8 +115,14 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 		slog.Warn("failed to cleanup temp segments on startup", "error", err)
 	}
 
-	if err := a.validateAndFixConfig(); err != nil {
-		slog.Warn("failed to validate config", "error", err)
+	if err := ReconcileConfig(&a.config); err != nil {
+		slog.Warn("failed to reconcile config at startup", "error", err)
+	}
+
+	// Start device monitor
+	a.deviceMonitor = NewDeviceMonitor(a.onDeviceChange)
+	if err := a.deviceMonitor.Start(); err != nil {
+		slog.Warn("failed to start device monitor", "error", err)
 	}
 
 	return nil
@@ -124,8 +132,17 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 func (a *App) ServiceShutdown() error {
 	slog.Info("Rewind service shutting down...")
 
+	if a.deviceMonitor != nil {
+		a.deviceMonitor.Stop()
+	}
+
 	if a.IsRecording() {
-		a.StopRecording()
+		err := a.StopRecording()
+		if err != nil {
+			slog.Error("failed to stop recording during shutdown", "error", err)
+			// todo
+			return err
+		}
 	}
 
 	return nil
@@ -194,19 +211,14 @@ func (a *App) GetConfig() Config {
 	return a.config
 }
 
-// validateAndFixConfig checks if config values are valid and fixes them if needed
-func (a *App) validateAndFixConfig() error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	return ValidateAndFixConfig(&a.config)
+// EmitEvent emits an event to the frontend
+func (a *App) EmitEvent(eventName string, data interface{}) {
+	if a.app != nil {
+		a.app.Event.Emit(eventName, data)
+	}
 }
 
-// RefreshConfig reloads devices and validates config
-func (a *App) RefreshConfig() error {
-	return a.validateAndFixConfig()
-}
-
+// UpdateConfig updates the configuration and saves it
 func (a *App) UpdateConfig(cfg Config) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -221,9 +233,9 @@ func (a *App) UpdateConfig(cfg Config) error {
 	}
 
 	a.config = cfg
-	slog.Info("config updated", "config", cfg)
+	slog.Info("config updated", "config", a.config)
 
-	if err := saveConfigToFile(cfg); err != nil {
+	if err := saveConfigToFile(a.config); err != nil {
 		slog.Warn("failed to save config", "error", err)
 	}
 
@@ -293,13 +305,13 @@ func (a *App) StartRecording() error {
 	// Initialize replay buffer
 	handle, err := InitReplayBuffer(config)
 	if err != nil {
-		a.setState(StatusIdle, "")
+		a.setState(StateUpdate{Status: Ptr(StatusIdle), ErrorMessage: Ptr("")})
 		return fmt.Errorf("failed to start replay buffer: %w", err)
 	}
 
 	a.replayHandle = handle
 	a.startTime = time.Now()
-	a.setState(StatusRecording, "")
+	a.setState(StateUpdate{Status: Ptr(StatusRecording), ErrorMessage: Ptr("")})
 
 	go a.updateBufferStatus()
 
@@ -330,7 +342,7 @@ func (a *App) StopRecording() error {
 		a.replayHandle = 0
 	}
 
-	a.setState(StatusIdle, "")
+	a.setState(StateUpdate{Status: Ptr(StatusIdle), ErrorMessage: Ptr("")})
 	slog.Info("recording stopped")
 	return nil
 }
@@ -373,8 +385,7 @@ func (a *App) SaveCurrentClip() (string, error) {
 	}
 
 	previousStatus := a.state.Status
-	a.state.Status = StatusSaving
-	a.emitStateChange()
+	a.setState(StateUpdate{Status: Ptr(StatusSaving), ErrorMessage: Ptr("")})
 
 	handle := a.replayHandle
 	outputDir := a.config.OutputDir
@@ -388,11 +399,10 @@ func (a *App) SaveCurrentClip() (string, error) {
 	rustSaveDuration := time.Since(rustSaveStartTime)
 
 	a.mu.Lock()
-	a.state.Status = previousStatus
+	a.setState(StateUpdate{Status: Ptr(previousStatus), ErrorMessage: Ptr("")})
 	if err == nil {
 		a.lastSaveTime = time.Now()
 	}
-	a.emitStateChange()
 	a.mu.Unlock()
 
 	if err != nil {
@@ -406,7 +416,7 @@ func (a *App) SaveCurrentClip() (string, error) {
 		return "", err
 	}
 
-	a.emitClipsUpdated()
+	a.EmitEvent(EventClipsUpdated, nil)
 
 	totalDuration := time.Since(saveStartTime)
 	slog.Info("save operation completed",
@@ -477,34 +487,74 @@ func (a *App) DeleteClips(paths []string) error {
 		return err
 	}
 
-	a.emitClipsUpdated()
+	a.EmitEvent(EventClipsUpdated, nil)
 	return nil
 }
 
-func (a *App) emitClipsUpdated() {
-	if a.app != nil {
-		a.app.Event.Emit("clips-updated")
+// onDeviceChange is the callback invoked by DeviceMonitor.
+func (a *App) onDeviceChange() {
+	slog.Info("Hardware device list changed, synchronizing...")
+
+	a.mu.Lock()
+	isRecording := a.state.Status == StatusRecording
+	err := ReconcileConfig(&a.config)
+	a.mu.Unlock()
+
+	if isRecording && err != nil {
+		switch {
+		case errors.Is(err, ErrDisplayNotFound):
+			a.stopRecordingDueToDeviceRemoval("Recording monitor was disconnected")
+		case errors.Is(err, ErrMicNotFound):
+			a.stopRecordingDueToDeviceRemoval("Microphone was disconnected")
+		case errors.Is(err, ErrSystemAudioNotFound):
+			a.stopRecordingDueToDeviceRemoval("Audio device was disconnected")
+		}
 	}
+
+	a.EmitEvent(EventDeviceListChanged, nil)
+}
+
+// stopRecordingDueToDeviceRemoval halts recording and emits a disconnect event.
+func (a *App) stopRecordingDueToDeviceRemoval(message string) {
+	if err := a.StopRecording(); err != nil {
+		slog.Error("Failed to stop recording after device removal", "error", err)
+	}
+
+	a.EmitEvent(EventDeviceDisconnected, map[string]string{"message": message})
+}
+
+// StateUpdate holds optional state update fields
+type StateUpdate struct {
+	Status        *Status
+	ErrorMessage  *string
+	BufferUsage   *float64
+	RecordingFor  *int
+	DiskUsageMB   *float64
+	MemoryUsageMB *float64
 }
 
 // setState updates state and notifies listeners
-func (a *App) setState(status Status, errorMsg string) {
-	a.state.Status = status
-	a.state.ErrorMessage = errorMsg
-
-	a.emitStateChange()
-}
-
-func (a *App) emitStateChange() {
-	// Notify frontend
-	if a.app != nil {
-		a.app.Event.Emit("state-changed", a.state)
+func (a *App) setState(update StateUpdate) {
+	if update.Status != nil {
+		a.state.Status = *update.Status
+	}
+	if update.ErrorMessage != nil {
+		a.state.ErrorMessage = *update.ErrorMessage
+	}
+	if update.BufferUsage != nil {
+		a.state.BufferUsage = *update.BufferUsage
+	}
+	if update.RecordingFor != nil {
+		a.state.RecordingFor = *update.RecordingFor
+	}
+	if update.DiskUsageMB != nil {
+		a.state.DiskUsageMB = *update.DiskUsageMB
+	}
+	if update.MemoryUsageMB != nil {
+		a.state.MemoryUsageMB = *update.MemoryUsageMB
 	}
 
-	// Notify tray manager
-	if a.onTrayStateChange != nil {
-		go a.onTrayStateChange(a.state)
-	}
+	a.EmitEvent(EventStateChanged, a.state)
 }
 
 // updateBufferStatus periodically updates buffer usage from Rust
@@ -543,17 +593,13 @@ func (a *App) updateBufferStatus() {
 
 		// Update state
 		a.mu.Lock()
-		a.state.BufferUsage = bufferUsage
-		a.state.RecordingFor = int(elapsed)
-		a.state.DiskUsageMB = diskUsageMB
-		a.state.MemoryUsageMB = memoryUsageMB
-		state := a.state
+		a.setState(StateUpdate{
+			BufferUsage:   Ptr(bufferUsage),
+			RecordingFor:  Ptr(int(elapsed)),
+			DiskUsageMB:   Ptr(diskUsageMB),
+			MemoryUsageMB: Ptr(memoryUsageMB),
+		})
 		a.mu.Unlock()
-
-		// Emit state change event
-		if a.app != nil {
-			a.app.Event.Emit("state-changed", state)
-		}
 	}
 }
 
@@ -566,12 +612,10 @@ func (a *App) handleRuntimeError(level string, message string) {
 		return
 	}
 
-	if a.app != nil {
-		a.app.Event.Emit("runtime-error", map[string]string{
-			"level":   level,
-			"message": message,
-		})
-	}
+	a.EmitEvent(EventRuntimeError, map[string]string{
+		"level":   level,
+		"message": message,
+	})
 
 	if level == "error" && isCriticalError(message) {
 		slog.Error("critical error detected, stopping recording", "message", message)
