@@ -6,6 +6,12 @@ use std::sync::atomic::{self, AtomicBool};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 use crate::audio_capture::{resample_pcm, CircularAudioBuffer};
 
 #[derive(Debug, Clone)]
@@ -472,8 +478,8 @@ impl ReplayBuffer {
             let ar_str = output_sample_rate.to_string();
             let ac_str = output_channels.to_string();
 
-            let output = std::process::Command::new(&self.config.ffmpeg_path)
-                .args(&[
+            let mut cmd = std::process::Command::new(&self.config.ffmpeg_path);
+            cmd.args(&[
                     "-f",
                     "concat",
                     "-safe",
@@ -501,8 +507,10 @@ impl ReplayBuffer {
                     "1:a:0",
                     "-y",
                     output_path.to_str().unwrap(),
-                ])
-                .output()?;
+                ]);
+            #[cfg(target_os = "windows")]
+            cmd.creation_flags(CREATE_NO_WINDOW);
+            let output = cmd.output()?;
 
             if !output.stderr.is_empty() {
                 for line in String::from_utf8_lossy(&output.stderr).lines() {
@@ -531,8 +539,8 @@ impl ReplayBuffer {
                 return Err("Save operation timed out (45s limit exceeded)".into());
             }
 
-            let output = std::process::Command::new(&self.config.ffmpeg_path)
-                .args(&[
+            let mut cmd = std::process::Command::new(&self.config.ffmpeg_path);
+            cmd.args(&[
                     "-f",
                     "concat",
                     "-safe",
@@ -543,8 +551,10 @@ impl ReplayBuffer {
                     "copy",
                     "-y",
                     output_path.to_str().unwrap(),
-                ])
-                .output()?;
+                ]);
+            #[cfg(target_os = "windows")]
+            cmd.creation_flags(CREATE_NO_WINDOW);
+            let output = cmd.output()?;
 
             if !output.stderr.is_empty() {
                 for line in String::from_utf8_lossy(&output.stderr).lines() {

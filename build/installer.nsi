@@ -61,6 +61,9 @@ Section "Rewind" SecRewind
     ; Main executable
     File "Rewind.exe"
 
+    ; Native DLL (Rust backend)
+    File "rewind_api.dll"
+
     ; FFmpeg Sidecar
     SetOutPath "$INSTDIR\bin"
     File "bin\ffmpeg.exe"
@@ -111,6 +114,7 @@ SectionEnd
 Section "Uninstall"
     ; Remove program files
     Delete "$INSTDIR\Rewind.exe"
+    Delete "$INSTDIR\rewind_api.dll"
     Delete "$INSTDIR\uninstall.exe"
     Delete "$INSTDIR\bin\ffmpeg.exe"
     RMDir "$INSTDIR\bin"
