@@ -8,7 +8,7 @@ vars:
 tasks:
   dev:
     desc: Run the application in development mode
-    deps: [build:frontend]
+    deps: [build:native, build:frontend]
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 
@@ -26,9 +26,16 @@ tasks:
     cmds:
       - go run .
 
+  build:native:
+    desc: Build Rust native library
+    dir: native
+    cmds:
+      - cargo build --release
+      - powershell -Command "Copy-Item target\release\rewind_api.dll ..\rewind_api.dll -Force"
+
   windows:build:
     desc: Build the Windows application
-    deps: [build:frontend]
+    deps: [build:native, build:frontend]
     cmds:
       - powershell -Command "if (!(Test-Path .build)) { mkdir .build | Out-Null }"
       - wails3 generate syso -icon build/assets/icon.ico -manifest build/wails.exe.manifest -arch amd64
@@ -67,6 +74,7 @@ tasks:
     cmds:
       - powershell -Command "if (!(Test-Path .build/bin)) { mkdir .build/bin | Out-Null }"
       - powershell -Command "Copy-Item bin\ffmpeg.exe .build\bin\ffmpeg.exe -Force"
+      - powershell -Command "Copy-Item rewind_api.dll .build\rewind_api.dll -Force"
       - powershell -Command "Copy-Item build\installer.nsi .build\installer.nsi -Force"
       - powershell -Command "if (Test-Path build\assets\icon.ico) { Copy-Item build\assets\icon.ico .build\icon.ico -Force }"
       - makensis .build/installer.nsi
@@ -79,7 +87,8 @@ tasks:
     cmds:
       - powershell -Command "if (!(Test-Path .build/bin)) { mkdir .build/bin | Out-Null }"
       - powershell -Command "Copy-Item bin\ffmpeg.exe .build\bin\ffmpeg.exe -Force"
-      - powershell -Command "Compress-Archive -Path .build\rewind.exe,.build\bin -DestinationPath .build\Rewind-Portable.zip -Force"
+      - powershell -Command "Copy-Item rewind_api.dll .build\rewind_api.dll -Force"
+      - powershell -Command "Compress-Archive -Path .build\rewind.exe,.build\bin,.build\rewind_api.dll -DestinationPath .build\Rewind-Portable.zip -Force"
 
   package:
     desc: Build executable + installer + portable ZIP
@@ -92,4 +101,6 @@ tasks:
     cmds:
       - powershell -Command "if (Test-Path .build) { Remove-Item -Recurse -Force .build }"
       - powershell -Command "if (Test-Path frontend/dist) { Remove-Item -Recurse -Force frontend/dist }"
+      - powershell -Command "if (Test-Path native/target) { Remove-Item -Recurse -Force native/target }"
+      - powershell -Command "if (Test-Path rewind_api.dll) { Remove-Item -Force rewind_api.dll }"
       - powershell -Command "if (Test-Path rsrc_windows_amd64.syso) { Remove-Item -Force rsrc_windows_amd64.syso }"

@@ -16,6 +16,11 @@ export function TitleBar({ title = "Rewind", children }: TitleBarProps) {
         Window.Close()
     }
 
+    // Split children into status badge and clips drawer
+    const childrenArray = Array.isArray(children) ? children : [children]
+    const statusBadge = childrenArray[0]
+    const clipsDrawer = childrenArray[1]
+
     return (
         <div className="title-bar">
             <div className="title-bar-drag">
@@ -28,8 +33,11 @@ export function TitleBar({ title = "Rewind", children }: TitleBarProps) {
                 </div>
             </div>
 
-            {/* Extra content slot (for status badge, etc.) */}
-            {children && <div className="title-bar-content">{children}</div>}
+            {/* Status badge and clips drawer */}
+            <div className="title-bar-content">
+                {statusBadge}
+                {clipsDrawer}
+            </div>
 
             <div className="title-bar-controls">
                 <button

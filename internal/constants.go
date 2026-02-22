@@ -1,0 +1,34 @@
+package internal
+
+import "time"
+
+const (
+	// Recording constraints
+	MinFPS = 1
+	MaxFPS = 240
+
+	// Save operation
+	SaveDebounceSeconds  = 5
+	SaveDebounceDuration = SaveDebounceSeconds * time.Second
+
+	// Buffer monitoring
+	BufferUpdateInterval = 1 * time.Second
+
+	// Unit conversions
+	BytesToMB      = 1024 * 1024
+	MbpsToBytes    = 1000000
+	MaxBufferUsage = 100.0
+
+	// Error handling
+	CriticalErrorDelay = 100 * time.Millisecond
+
+	// Event names
+	EventStateChanged       = "state-changed"
+	EventClipsUpdated       = "clips-updated"
+	EventDeviceListChanged  = "device-list-changed"
+	EventDeviceDisconnected = "device-disconnected"
+	EventRuntimeError       = "runtime-error"
+)
+
+// Valid segment durations in seconds
+var ValidSegmentDurations = []int{2, 5, 10}

@@ -7,24 +7,26 @@ export interface DisplayInfo {
     isPrimary: boolean
 }
 
-export interface EncoderInfo {
-    name: string
-    codec: string
-    gpuName: string
-}
-
 export interface Config {
     displayIndex: number
-    encoderName: string
+    monitorName: string
     fps: number
-    bitrate: string
+    bitrate: number
     recordSeconds: number
+    segmentDurationSec: number
     outputDir: string
-    convertToMP4: boolean
-    microphoneDevice: string
-    micVolume: number
-    systemAudioDevice: string
-    sysVolume: number
+    microphoneDevice: number
+    microphoneName: string
+    systemAudioDevice: number
+    systemAudioName: string
+    microphoneVolume: number
+    systemAudioVolume: number
+    showCursor: boolean
+    showBorder: boolean
+    notificationsEnabled: boolean
+    notificationsOnlyErrors: boolean
+    notificationsPosition: string
+    notificationsDurationMs: number
 }
 
 export interface Clip {
@@ -32,33 +34,32 @@ export interface Clip {
     path: string
     size: number
     modTime: string
-    isRawFolder: boolean
-    durationSec?: number
 }
 
 export interface State {
-    status: 'idle' | 'recording' | 'saving' | 'error'
+    status: 'idle' | 'recording' | 'saving'
     errorMessage?: string
     bufferUsage: number
     recordingFor: number
+    diskUsageMB: number
+    memoryUsageMB: number
 }
 
-import * as AppBindings from '../../bindings/rewind/internal/app/app'
-import { Events } from "@wailsio/runtime"
+export const Events = {
+    STATE_CHANGED: 'state-changed',
+    CLIPS_UPDATED: 'clips-updated',
+    DEVICE_LIST_CHANGED: 'device-list-changed',
+    DEVICE_DISCONNECTED: 'device-disconnected',
+    RUNTIME_ERROR: 'runtime-error',
+} as const
+
+import { App as AppBindings } from '../../bindings/rewind/internal'
+import { Events as WailsEvents } from "@wailsio/runtime"
 
 export const api = {
-    async initialize(): Promise<void> {
-        return AppBindings.Initialize()
-    },
-
     async getDisplays(): Promise<DisplayInfo[]> {
-        const displays = await AppBindings.GetDisplays()
+        const displays = await AppBindings.ListAvailableDisplays()
         return displays as unknown as DisplayInfo[]
-    },
-
-    async getEncoders(): Promise<EncoderInfo[]> {
-        const encoders = await AppBindings.GetEncodersForDisplay(0)
-        return encoders as unknown as EncoderInfo[]
     },
 
     async getConfig(): Promise<Config> {
@@ -67,73 +68,74 @@ export const api = {
     },
 
     async setConfig(config: Config): Promise<void> {
-        return AppBindings.SetConfig(config as any)
+        return AppBindings.UpdateConfig(config as any)
     },
 
     async getState(): Promise<State> {
-        const state = await AppBindings.GetState()
+        const state = await AppBindings.GetRecordingState()
         return state as unknown as State
     },
 
     async start(): Promise<void> {
-        return AppBindings.Start()
+        return AppBindings.StartRecording()
     },
 
     async stop(): Promise<void> {
-        return AppBindings.Stop()
+        return AppBindings.StopRecording()
     },
 
     async saveClip(): Promise<string> {
-        return AppBindings.SaveClip()
-    },
-
-    async isRecording(): Promise<boolean> {
-        return AppBindings.IsRecording()
+        return AppBindings.SaveCurrentClip()
     },
 
     async SelectDirectory(): Promise<string> {
-        return AppBindings.SelectDirectory()
-    },
-
-    async estimateMemory(bitrate: string, seconds: number, hasMic: boolean, hasSys: boolean): Promise<string> {
-        return AppBindings.EstimateMemory(bitrate, seconds, hasMic, hasSys)
+        return AppBindings.ChooseOutputDirectory()
     },
 
     async getClips(): Promise<Clip[]> {
-        const clips = await AppBindings.GetClips()
+        const clips = await AppBindings.ListSavedClips()
         return clips as unknown as Clip[]
     },
 
     async openClip(path: string): Promise<void> {
-        return AppBindings.OpenClip(path)
+        return AppBindings.OpenClipInExplorer(path)
     },
 
-    async convertToMP4(path: string): Promise<void> {
-        return AppBindings.ConvertToMP4(path)
+    async openOutputDirectory(): Promise<void> {
+        return AppBindings.OpenOutputDirectory()
     },
 
-    async getEncodersForDisplay(displayIndex: number): Promise<EncoderInfo[]> {
-        const encoders = await AppBindings.GetEncodersForDisplay(displayIndex)
-        return encoders as unknown as EncoderInfo[]
+    async deleteClips(paths: string[]): Promise<void> {
+        return AppBindings.DeleteClips(paths)
     },
 
     async getInputDevices(): Promise<string[]> {
-        return (AppBindings as any).GetInputDevices()
+        return AppBindings.ListAudioInputDevices()
     },
 
     async getOutputDevices(): Promise<string[]> {
-        return (AppBindings as any).GetOutputDevices()
+        return AppBindings.ListAudioOutputDevices()
+    },
+
+    async broadcastNotification(type: string, title: string, description?: string): Promise<void> {
+        return AppBindings.BroadcastNotification(type, title, description || '')
+    },
+
+    async showNotificationWindow(position: string): Promise<void> {
+        return AppBindings.ShowNotificationWindow(position)
+    },
+
+    async hideNotificationWindow(): Promise<void> {
+        return AppBindings.HideNotificationWindow()
+    },
+
+    async broadcastConfigUpdate(config: Record<string, any>): Promise<void> {
+        WailsEvents.Emit('notification:config-updated', config)
     },
 
     Events: {
         On: (eventName: string, callback: (data: any) => void) => {
-            return Events.On(eventName, callback)
-        },
-        Off: (eventName: string) => {
-            return Events.Off(eventName)
-        },
-        Emit: (eventName: string, data?: any) => {
-            return Events.Emit(eventName, data)
+            return WailsEvents.On(eventName, callback)
         }
     }
 }

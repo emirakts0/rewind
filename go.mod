@@ -1,9 +1,8 @@
 module rewind
 
-go 1.25
+go 1.26
 
 require (
-	github.com/gen2brain/malgo v0.11.24
 	github.com/wailsapp/wails/v3 v3.0.0-alpha.59
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
@@ -43,7 +42,7 @@ require (
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/net v0.37.0 // indirect
-	golang.org/x/sys v0.33.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
