@@ -12,23 +12,14 @@ pub struct AudioDeviceInfo {
     pub index: usize,
     pub name: String,
     pub is_input: bool,
+    pub sample_rate: u32,
+    pub channels: u16,
 }
 
 #[derive(Debug, Clone)]
-pub struct AudioCaptureConfig {
+pub struct AudioFormat {
     pub sample_rate: u32,
     pub channels: u16,
-    pub enabled: bool,
-}
-
-impl Default for AudioCaptureConfig {
-    fn default() -> Self {
-        Self {
-            sample_rate: 48000,
-            channels: 2,
-            enabled: false,
-        }
-    }
 }
 
 pub fn list_audio_devices() -> Result<Vec<AudioDeviceInfo>, Box<dyn std::error::Error>> {
@@ -39,12 +30,18 @@ pub fn list_audio_devices() -> Result<Vec<AudioDeviceInfo>, Box<dyn std::error::
     if let Ok(inputs) = host.input_devices() {
         for device in inputs {
             if let Ok(desc) = device.description() {
-                devices.push(AudioDeviceInfo {
-                    index: i,
-                    name: desc.name().to_string(),
-                    is_input: true,
-                });
-                i += 1;
+                if let Ok(cfg) = device.default_input_config() {
+                    devices.push(AudioDeviceInfo {
+                        index: i,
+                        name: format!("{} ({} Hz)", desc.name(), cfg.sample_rate()),
+                        is_input: true,
+                        sample_rate: cfg.sample_rate(),
+                        channels: cfg.channels(),
+                    });
+                    i += 1;
+                } else {
+                    log::warn!("Skipping input device '{}': no default config", desc.name());
+                }
             }
         }
     }
@@ -52,12 +49,21 @@ pub fn list_audio_devices() -> Result<Vec<AudioDeviceInfo>, Box<dyn std::error::
     if let Ok(outputs) = host.output_devices() {
         for device in outputs {
             if let Ok(desc) = device.description() {
-                devices.push(AudioDeviceInfo {
-                    index: i,
-                    name: format!("{} [Loopback]", desc.name()),
-                    is_input: false,
-                });
-                i += 1;
+                if let Ok(cfg) = device.default_output_config() {
+                    devices.push(AudioDeviceInfo {
+                        index: i,
+                        name: format!("{} ({} Hz)", desc.name(), cfg.sample_rate()),
+                        is_input: false,
+                        sample_rate: cfg.sample_rate(),
+                        channels: cfg.channels(),
+                    });
+                    i += 1;
+                } else {
+                    log::warn!(
+                        "Skipping output device '{}': no default config",
+                        desc.name()
+                    );
+                }
             }
         }
     }
@@ -76,27 +82,28 @@ pub struct AudioCapture {
 }
 
 impl AudioCapture {
-    pub fn new(
-        device_index: Option<usize>,
-        config: AudioCaptureConfig,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        if !config.enabled {
-            return Err("Audio capture is disabled".into());
-        }
-
+    pub fn new(device_index: usize) -> Result<(Self, AudioFormat), Box<dyn std::error::Error>> {
         let host = cpal::default_host();
-        let (device, is_input) = if let Some(idx) = device_index {
-            Self::find_device_by_index(&host, idx)?
+        let (device, is_input) = Self::find_device_by_index(&host, device_index)?;
+
+        let default_config = if is_input {
+            device.default_input_config()
         } else {
-            let device = host
-                .default_input_device()
-                .ok_or("No default input device")?;
-            (device, true)
-        };
+            device.default_output_config()
+        }
+        .map_err(|e| {
+            format!(
+                "Failed to get default config for device {}: {}",
+                device_index, e
+            )
+        })?;
+
+        let sample_rate = default_config.sample_rate();
+        let channels = default_config.channels();
 
         let stream_config = StreamConfig {
-            channels: config.channels,
-            sample_rate: config.sample_rate,
+            channels,
+            sample_rate,
             buffer_size: cpal::BufferSize::Default,
         };
 
@@ -133,17 +140,25 @@ impl AudioCapture {
 
         stream.play()?;
 
+        let format = AudioFormat {
+            sample_rate,
+            channels,
+        };
+
         log::info!(
             "Audio capture started: {}Hz, {} channels ({})",
-            config.sample_rate,
-            config.channels,
+            format.sample_rate,
+            format.channels,
             if is_input { "Input" } else { "Loopback" }
         );
 
-        Ok(Self {
-            _stream: stream,
-            receiver: Arc::new(Mutex::new(receiver)),
-        })
+        Ok((
+            Self {
+                _stream: stream,
+                receiver: Arc::new(Mutex::new(receiver)),
+            },
+            format,
+        ))
     }
 
     pub fn try_recv(&self) -> Option<TimestampedAudio> {
@@ -386,4 +401,66 @@ impl CircularAudioBuffer {
     pub fn current_bytes(&self) -> usize {
         self.current_bytes
     }
+
+    /// Returns the sample rate of this buffer
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    /// Returns the channel count of this buffer
+    pub fn channels(&self) -> u16 {
+        self.channels
+    }
+}
+
+/// Resample PCM i16 audio data from one sample rate to another using linear interpolation.
+/// Both source and target are interleaved i16 PCM with the given number of channels.
+pub fn resample_pcm(data: &[u8], src_rate: u32, dst_rate: u32, channels: u16) -> Vec<u8> {
+    if src_rate == dst_rate || data.is_empty() {
+        return data.to_vec();
+    }
+
+    let ch = channels as usize;
+    let bpf = ch * 2; // bytes per frame (i16 = 2 bytes per sample)
+    let src_frames = data.len() / bpf;
+    if src_frames == 0 {
+        return Vec::new();
+    }
+
+    let dst_frames = ((src_frames as f64) * (dst_rate as f64) / (src_rate as f64)).ceil() as usize;
+    let mut result = Vec::with_capacity(dst_frames * bpf);
+
+    let ratio = src_rate as f64 / dst_rate as f64;
+
+    for dst_frame in 0..dst_frames {
+        let src_pos = dst_frame as f64 * ratio;
+        let src_frame = src_pos as usize;
+        let frac = src_pos - src_frame as f64;
+
+        for c in 0..ch {
+            let idx0 = src_frame * bpf + c * 2;
+            let sample0 = if idx0 + 1 < data.len() {
+                i16::from_le_bytes([data[idx0], data[idx0 + 1]]) as f64
+            } else {
+                0.0
+            };
+
+            let sample1 = if src_frame + 1 < src_frames {
+                let idx1 = (src_frame + 1) * bpf + c * 2;
+                if idx1 + 1 < data.len() {
+                    i16::from_le_bytes([data[idx1], data[idx1 + 1]]) as f64
+                } else {
+                    sample0
+                }
+            } else {
+                sample0
+            };
+
+            let interpolated = sample0 + frac * (sample1 - sample0);
+            let clamped = interpolated.clamp(-32768.0, 32767.0) as i16;
+            result.extend_from_slice(&clamped.to_le_bytes());
+        }
+    }
+
+    result
 }

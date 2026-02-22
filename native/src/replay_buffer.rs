@@ -6,7 +6,7 @@ use std::sync::atomic::{self, AtomicBool};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use crate::audio_capture::CircularAudioBuffer;
+use crate::audio_capture::{resample_pcm, CircularAudioBuffer};
 
 #[derive(Debug, Clone)]
 pub struct ReplayBufferConfig {
@@ -94,9 +94,7 @@ impl ReplayBuffer {
             let _ = fs::remove_file(&source_path);
         }
 
-        let file_size = fs::metadata(&dest_path)
-            .map(|m| m.len())
-            .unwrap_or(0);
+        let file_size = fs::metadata(&dest_path).map(|m| m.len()).unwrap_or(0);
 
         segments.push_back(SegmentInfo {
             path: dest_path,
@@ -110,7 +108,11 @@ impl ReplayBuffer {
         *total_dur += duration_secs;
         *total_disk += file_size;
 
-        let active_dur: f64 = segments.iter().filter(|s| !s.saving).map(|s| s.duration_secs).sum();
+        let active_dur: f64 = segments
+            .iter()
+            .filter(|s| !s.saving)
+            .map(|s| s.duration_secs)
+            .sum();
         let mut excess = active_dur - self.config.buffer_duration_secs as f64;
         while excess > 0.0 {
             if let Some(pos) = segments.iter().position(|s| !s.saving) {
@@ -132,26 +134,22 @@ impl ReplayBuffer {
         output_path: P,
         mic_audio_buffer: Option<&Arc<Mutex<CircularAudioBuffer>>>,
         speaker_audio_buffer: Option<&Arc<Mutex<CircularAudioBuffer>>>,
-        audio_sample_rate: u32,
-        audio_channels: u16,
         mic_volume: f32,
         speaker_volume: f32,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let timeout_duration = std::time::Duration::from_secs(45);
         let start_time = Instant::now();
-        
+
         let result = self.save_to_file_internal(
             output_path,
             mic_audio_buffer,
             speaker_audio_buffer,
-            audio_sample_rate,
-            audio_channels,
             mic_volume,
             speaker_volume,
             start_time,
             timeout_duration,
         );
-        
+
         if result.is_err() {
             self.unmark_saving_segments();
         }
@@ -164,14 +162,27 @@ impl ReplayBuffer {
         output_path: P,
         mic_audio_buffer: Option<&Arc<Mutex<CircularAudioBuffer>>>,
         speaker_audio_buffer: Option<&Arc<Mutex<CircularAudioBuffer>>>,
-        audio_sample_rate: u32,
-        audio_channels: u16,
         mic_volume: f32,
         speaker_volume: f32,
         start_time: Instant,
         timeout_duration: std::time::Duration,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let (segment_paths, video_wall_start, video_wall_end, seg_count, total_dur, mic_data, speaker_data) = {
+        // Snapshot data from audio buffers along with their format info
+        struct AudioSnapshot {
+            data: Vec<u8>,
+            sample_rate: u32,
+            channels: u16,
+        }
+
+        let (
+            segment_paths,
+            video_wall_start,
+            video_wall_end,
+            seg_count,
+            total_dur,
+            mic_snap,
+            speaker_snap,
+        ) = {
             let mut segments = self.segments.lock().unwrap();
 
             if segments.is_empty() {
@@ -190,19 +201,43 @@ impl ReplayBuffer {
             let count = saving_segs.len();
             let dur: f64 = saving_segs.iter().map(|s| s.duration_secs).sum();
 
-            let mic_snap = mic_audio_buffer.and_then(|buf| {
+            let mic_snapshot = mic_audio_buffer.and_then(|buf| {
                 let buffer = buf.lock().ok()?;
                 let data = buffer.get_samples_from(wall_start);
-                if data.is_empty() { None } else { Some(data) }
+                if data.is_empty() {
+                    None
+                } else {
+                    Some(AudioSnapshot {
+                        data,
+                        sample_rate: buffer.sample_rate(),
+                        channels: buffer.channels(),
+                    })
+                }
             });
 
-            let speaker_snap = speaker_audio_buffer.and_then(|buf| {
+            let speaker_snapshot = speaker_audio_buffer.and_then(|buf| {
                 let buffer = buf.lock().ok()?;
                 let data = buffer.get_samples_from(wall_start);
-                if data.is_empty() { None } else { Some(data) }
+                if data.is_empty() {
+                    None
+                } else {
+                    Some(AudioSnapshot {
+                        data,
+                        sample_rate: buffer.sample_rate(),
+                        channels: buffer.channels(),
+                    })
+                }
             });
 
-            (paths, wall_start, wall_end, count, dur, mic_snap, speaker_snap)
+            (
+                paths,
+                wall_start,
+                wall_end,
+                count,
+                dur,
+                mic_snapshot,
+                speaker_snapshot,
+            )
         };
 
         log::info!("Saving replay buffer...");
@@ -229,7 +264,7 @@ impl ReplayBuffer {
             } else {
                 &path_str
             };
-            
+
             writeln!(concat_file, "file '{}'", clean_path)?;
         }
         concat_file.sync_all()?;
@@ -241,31 +276,103 @@ impl ReplayBuffer {
 
         let video_duration = total_dur;
 
-        let bpf = (audio_channels as usize) * 2;
-
-        let has_audio = mic_data.is_some() || speaker_data.is_some();
+        let has_audio = mic_snap.is_some() || speaker_snap.is_some();
 
         if has_audio {
             log::info!("Processing audio...");
 
-            if let Some(ref d) = mic_data {
-                let dur = (d.len() / bpf) as f64 / audio_sample_rate as f64;
-                log::info!("Mic audio: {:.2}s", dur);
-            }
-            if let Some(ref d) = speaker_data {
-                let dur = (d.len() / bpf) as f64 / audio_sample_rate as f64;
-                log::info!("Speaker audio: {:.2}s", dur);
-            }
+            let output_sample_rate = match (&mic_snap, &speaker_snap) {
+                (Some(m), Some(s)) => m.sample_rate.max(s.sample_rate),
+                (Some(m), None) => m.sample_rate,
+                (None, Some(s)) => s.sample_rate,
+                (None, None) => unreachable!(),
+            };
+            let output_channels: u16 = 2; // Always output stereo
+            let bpf = (output_channels as usize) * 2;
+
+            log::info!(
+                "Output audio format: {}Hz, {} channels",
+                output_sample_rate,
+                output_channels
+            );
+
+            let normalize_channels =
+                |data: &[u8], src_channels: u16, dst_channels: u16| -> Vec<u8> {
+                    if src_channels == dst_channels {
+                        return data.to_vec();
+                    }
+                    let src_bpf = (src_channels as usize) * 2;
+                    let dst_bpf = (dst_channels as usize) * 2;
+                    let frames = data.len() / src_bpf;
+                    let mut result = Vec::with_capacity(frames * dst_bpf);
+
+                    for i in 0..frames {
+                        let src_offset = i * src_bpf;
+                        if src_channels == 1 && dst_channels == 2 {
+                            // Mono to stereo: duplicate the sample
+                            let sample = &data[src_offset..src_offset + 2];
+                            result.extend_from_slice(sample);
+                            result.extend_from_slice(sample);
+                        } else if src_channels > dst_channels {
+                            // Take first dst_channels
+                            result.extend_from_slice(&data[src_offset..src_offset + dst_bpf]);
+                        } else {
+                            // src < dst and not 1->2: copy what we have, zero-pad rest
+                            result.extend_from_slice(&data[src_offset..src_offset + src_bpf]);
+                            for _ in src_channels..dst_channels {
+                                result.extend_from_slice(&[0u8; 2]);
+                            }
+                        }
+                    }
+                    result
+                };
+
+            let mic_ready = mic_snap.as_ref().map(|snap| {
+                log::info!(
+                    "Mic source: {}Hz, {} channels",
+                    snap.sample_rate,
+                    snap.channels
+                );
+                let ch_normalized = normalize_channels(&snap.data, snap.channels, output_channels);
+                let resampled = resample_pcm(
+                    &ch_normalized,
+                    snap.sample_rate,
+                    output_sample_rate,
+                    output_channels,
+                );
+                let dur = (resampled.len() / bpf) as f64 / output_sample_rate as f64;
+                log::info!("Mic audio ready: {:.2}s", dur);
+                resampled
+            });
+
+            let speaker_ready = speaker_snap.as_ref().map(|snap| {
+                log::info!(
+                    "Speaker source: {}Hz, {} channels",
+                    snap.sample_rate,
+                    snap.channels
+                );
+                let ch_normalized = normalize_channels(&snap.data, snap.channels, output_channels);
+                let resampled = resample_pcm(
+                    &ch_normalized,
+                    snap.sample_rate,
+                    output_sample_rate,
+                    output_channels,
+                );
+                let dur = (resampled.len() / bpf) as f64 / output_sample_rate as f64;
+                log::info!("Speaker audio ready: {:.2}s", dur);
+                resampled
+            });
 
             let apply_volume = |data: &[u8], volume: f32| -> Vec<u8> {
                 let frames = data.len() / bpf;
                 let mut processed = Vec::with_capacity(data.len());
-                
+
                 for i in 0..frames {
                     let offset = i * bpf;
-                    for ch in 0..(audio_channels as usize) {
+                    for ch in 0..(output_channels as usize) {
                         let byte_off = offset + ch * 2;
-                        let sample = i16::from_le_bytes([data[byte_off], data[byte_off + 1]]) as f32;
+                        let sample =
+                            i16::from_le_bytes([data[byte_off], data[byte_off + 1]]) as f32;
                         let adjusted = (sample * volume).clamp(-32768.0, 32767.0) as i16;
                         processed.extend_from_slice(&adjusted.to_le_bytes());
                     }
@@ -273,7 +380,7 @@ impl ReplayBuffer {
                 processed
             };
 
-            let audio_data = match (&mic_data, &speaker_data) {
+            let audio_data = match (&mic_ready, &speaker_ready) {
                 (Some(mic), Some(speaker)) => {
                     let max_len = mic.len().max(speaker.len());
                     let max_len = (max_len / bpf) * bpf;
@@ -283,7 +390,7 @@ impl ReplayBuffer {
 
                     for i in 0..max_frames {
                         let offset = i * bpf;
-                        for ch in 0..(audio_channels as usize) {
+                        for ch in 0..(output_channels as usize) {
                             let byte_off = offset + ch * 2;
 
                             let mic_sample = if byte_off + 1 < mic.len() {
@@ -298,7 +405,8 @@ impl ReplayBuffer {
                                 0.0
                             };
 
-                            let mixed_sample = (mic_sample * mic_volume + speaker_sample * speaker_volume)
+                            let mixed_sample = (mic_sample * mic_volume
+                                + speaker_sample * speaker_volume)
                                 .clamp(-32768.0, 32767.0)
                                 as i16;
                             mixed.extend_from_slice(&mixed_sample.to_le_bytes());
@@ -307,7 +415,7 @@ impl ReplayBuffer {
 
                     log::info!(
                         "Mixed mic + speaker: {:.2}s",
-                        (mixed.len() / bpf) as f64 / audio_sample_rate as f64
+                        (mixed.len() / bpf) as f64 / output_sample_rate as f64
                     );
                     mixed
                 }
@@ -316,14 +424,14 @@ impl ReplayBuffer {
                 (None, None) => unreachable!(),
             };
 
-            let target_samples = (video_duration * audio_sample_rate as f64) as usize;
+            let target_samples = (video_duration * output_sample_rate as f64) as usize;
             let target_bytes = target_samples * bpf;
 
             let final_audio = if audio_data.len() < target_bytes {
                 let deficit = target_bytes - audio_data.len();
                 log::info!(
                     "Padding {:.3}s silence at end",
-                    (deficit / bpf) as f64 / audio_sample_rate as f64
+                    (deficit / bpf) as f64 / output_sample_rate as f64
                 );
                 let mut padded = audio_data;
                 padded.resize(target_bytes, 0);
@@ -332,7 +440,7 @@ impl ReplayBuffer {
                 let excess = audio_data.len() - target_bytes;
                 log::info!(
                     "Trimming {:.3}s from end to match video",
-                    (excess / bpf) as f64 / audio_sample_rate as f64
+                    (excess / bpf) as f64 / output_sample_rate as f64
                 );
                 let mut trimmed = audio_data;
                 trimmed.truncate(target_bytes);
@@ -341,10 +449,11 @@ impl ReplayBuffer {
                 audio_data
             };
 
-            let final_dur = (final_audio.len() / bpf) as f64 / audio_sample_rate as f64;
+            let final_dur = (final_audio.len() / bpf) as f64 / output_sample_rate as f64;
             log::info!(
-                "Final audio: {:.2}s → matches video {:.2}s",
-                final_dur, video_duration
+                "Final audio: {:.2}s \u{2192} matches video {:.2}s",
+                final_dur,
+                video_duration
             );
 
             let temp_audio = self.config.temp_dir.join("temp_audio.pcm");
@@ -360,8 +469,8 @@ impl ReplayBuffer {
 
             log::info!("Concatenating video + muxing audio in single FFmpeg pass...");
 
-            let ar_str = audio_sample_rate.to_string();
-            let ac_str = audio_channels.to_string();
+            let ar_str = output_sample_rate.to_string();
+            let ac_str = output_channels.to_string();
 
             let output = std::process::Command::new(&self.config.ffmpeg_path)
                 .args(&[
@@ -416,12 +525,12 @@ impl ReplayBuffer {
             }
         } else {
             log::info!("No audio data available, concatenating video only...");
-            
+
             if start_time.elapsed() >= timeout_duration {
                 let _ = std::fs::remove_file(&concat_list_path);
                 return Err("Save operation timed out (45s limit exceeded)".into());
             }
-            
+
             let output = std::process::Command::new(&self.config.ffmpeg_path)
                 .args(&[
                     "-f",
@@ -557,8 +666,6 @@ pub struct ReplayBufferHandle {
     is_saving: Arc<AtomicBool>,
     mic_audio_buffer: Option<Arc<Mutex<CircularAudioBuffer>>>,
     speaker_audio_buffer: Option<Arc<Mutex<CircularAudioBuffer>>>,
-    audio_sample_rate: u32,
-    audio_channels: u16,
     mic_volume: f32,
     speaker_volume: f32,
 }
@@ -571,8 +678,6 @@ impl ReplayBufferHandle {
             is_saving: Arc::new(AtomicBool::new(false)),
             mic_audio_buffer: None,
             speaker_audio_buffer: None,
-            audio_sample_rate: 48000,
-            audio_channels: 2,
             mic_volume: 1.0,
             speaker_volume: 1.0,
         }
@@ -580,16 +685,11 @@ impl ReplayBufferHandle {
 
     pub fn set_audio_buffers(
         &mut self,
-        mic_buffer: Arc<Mutex<CircularAudioBuffer>>,
-        speaker_buffer: Arc<Mutex<CircularAudioBuffer>>,
+        mic_buffer: Option<Arc<Mutex<CircularAudioBuffer>>>,
+        speaker_buffer: Option<Arc<Mutex<CircularAudioBuffer>>>,
     ) {
-        self.mic_audio_buffer = Some(mic_buffer);
-        self.speaker_audio_buffer = Some(speaker_buffer);
-    }
-
-    pub fn set_audio_format(&mut self, sample_rate: u32, channels: u16) {
-        self.audio_sample_rate = sample_rate;
-        self.audio_channels = channels;
+        self.mic_audio_buffer = mic_buffer;
+        self.speaker_audio_buffer = speaker_buffer;
     }
 
     pub fn set_audio_volumes(&mut self, mic_volume: f32, speaker_volume: f32) {
@@ -609,8 +709,6 @@ impl ReplayBufferHandle {
             output_path,
             self.mic_audio_buffer.as_ref(),
             self.speaker_audio_buffer.as_ref(),
-            self.audio_sample_rate,
-            self.audio_channels,
             self.mic_volume,
             self.speaker_volume,
         );

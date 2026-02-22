@@ -27,8 +27,9 @@
 
 ## Overview
 
-Rewind continuously captures your screen in the background and lets you save the last moments on demand. Built with Rust for high-performance video capture and Go for application logic.
-
+> Rewind continuously captures your screen in the background and lets you save the last moments on demand. Built with Rust for high-performance video capture and Go for application logic.
+>
+> *Co-authored with AI via vibe coding — where intuition meets infrastructure.*
 
 ## Features
 

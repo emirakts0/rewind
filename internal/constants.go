@@ -7,10 +7,6 @@ const (
 	MinFPS = 1
 	MaxFPS = 240
 
-	// Audio configuration
-	DefaultSampleRate = 48000
-	DefaultChannels   = 2
-
 	// Save operation
 	SaveDebounceSeconds  = 5
 	SaveDebounceDuration = SaveDebounceSeconds * time.Second

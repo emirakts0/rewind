@@ -287,8 +287,6 @@ func (a *App) StartRecording() error {
 		Fps:          uint32(a.config.FPS),
 		VideoBitrate: uint32(a.config.Bitrate * MbpsToBytes),
 		Audio: AudioConfig{
-			SampleRate:         DefaultSampleRate,
-			Channels:           DefaultChannels,
 			MicDeviceIndex:     micIdx,
 			MicVolume:          float32(a.config.MicrophoneVolume) / 100.0,
 			SpeakerDeviceIndex: speakerIdx,

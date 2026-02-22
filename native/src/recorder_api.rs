@@ -16,7 +16,7 @@ use windows_capture::settings::{
     MinimumUpdateIntervalSettings, SecondaryWindowSettings, Settings,
 };
 
-use crate::audio_capture::{AudioCapture, AudioCaptureConfig, CircularAudioBuffer};
+use crate::audio_capture::{AudioCapture, CircularAudioBuffer};
 use crate::replay_buffer::{ReplayBuffer, ReplayBufferConfig, ReplayBufferHandle};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,8 +30,6 @@ pub struct MonitorInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AudioConfig {
-    pub sample_rate: u32,
-    pub channels: u16,
     pub mic_device_index: Option<usize>,
     pub mic_volume: f32,
     pub speaker_device_index: Option<usize>,
@@ -41,8 +39,6 @@ pub struct AudioConfig {
 impl Default for AudioConfig {
     fn default() -> Self {
         Self {
-            sample_rate: 48000,
-            channels: 2,
             mic_device_index: None,
             mic_volume: 1.0,
             speaker_device_index: None,
@@ -100,11 +96,14 @@ pub fn start_replay_buffer(
     log::info!("Initializing replay buffer...");
     log::info!(
         "Resolution: {}x{} @ {} FPS",
-        config.width, config.height, config.fps
+        config.width,
+        config.height,
+        config.fps
     );
     log::info!(
         "Buffer: {}s (segments: {}s)",
-        config.buffer_duration_secs, config.segment_duration_secs
+        config.buffer_duration_secs,
+        config.segment_duration_secs
     );
 
     let replay_buffer = Arc::new(ReplayBuffer::new(ReplayBufferConfig {
@@ -116,21 +115,60 @@ pub fn start_replay_buffer(
     let segment_margin = config.segment_duration_secs * 2;
     let percent_margin = (config.buffer_duration_secs as f64 * 0.2) as u64;
     let audio_buffer_duration = config.buffer_duration_secs + segment_margin.max(percent_margin);
-    let mic_audio_buffer = Arc::new(Mutex::new(CircularAudioBuffer::new(
-        Duration::from_secs(audio_buffer_duration),
-        config.audio.sample_rate,
-        config.audio.channels,
-    )));
-    let speaker_audio_buffer = Arc::new(Mutex::new(CircularAudioBuffer::new(
-        Duration::from_secs(audio_buffer_duration),
-        config.audio.sample_rate,
-        config.audio.channels,
-    )));
+
+    // Initialize audio captures — buffer is only created if capture succeeds
+    let mut mic_capture: Option<AudioCapture> = None;
+    let mut mic_audio_buffer: Option<Arc<Mutex<CircularAudioBuffer>>> = None;
+    let mut speaker_capture: Option<AudioCapture> = None;
+    let mut speaker_audio_buffer: Option<Arc<Mutex<CircularAudioBuffer>>> = None;
+
+    if let Some(mic_idx) = config.audio.mic_device_index {
+        match AudioCapture::new(mic_idx) {
+            Ok((capture, format)) => {
+                log::info!(
+                    "Mic device {}: {}Hz, {} channels",
+                    mic_idx,
+                    format.sample_rate,
+                    format.channels
+                );
+                mic_audio_buffer = Some(Arc::new(Mutex::new(CircularAudioBuffer::new(
+                    Duration::from_secs(audio_buffer_duration),
+                    format.sample_rate,
+                    format.channels,
+                ))));
+                mic_capture = Some(capture);
+            }
+            Err(e) => {
+                log::error!("Failed to init mic capture: {}", e);
+            }
+        }
+    }
+
+    if let Some(speaker_idx) = config.audio.speaker_device_index {
+        match AudioCapture::new(speaker_idx) {
+            Ok((capture, format)) => {
+                log::info!(
+                    "Speaker device {}: {}Hz, {} channels",
+                    speaker_idx,
+                    format.sample_rate,
+                    format.channels
+                );
+                speaker_audio_buffer = Some(Arc::new(Mutex::new(CircularAudioBuffer::new(
+                    Duration::from_secs(audio_buffer_duration),
+                    format.sample_rate,
+                    format.channels,
+                ))));
+                speaker_capture = Some(capture);
+            }
+            Err(e) => {
+                log::error!("Failed to init speaker capture: {}", e);
+            }
+        }
+    }
 
     let handle = Arc::new(Mutex::new(ReplayBufferHandle::new(replay_buffer.clone())));
     if let Ok(mut h) = handle.lock() {
         h.set_audio_buffers(mic_audio_buffer.clone(), speaker_audio_buffer.clone());
-        h.set_audio_format(config.audio.sample_rate, config.audio.channels);
         h.set_audio_volumes(config.audio.mic_volume, config.audio.speaker_volume);
     }
 
@@ -141,13 +179,14 @@ pub fn start_replay_buffer(
         height: config.height,
         fps: config.fps,
         video_bitrate: config.video_bitrate,
-        audio_config: config.audio,
         segment_duration_secs: config.segment_duration_secs,
         replay_buffer: replay_buffer.clone(),
         handle: handle.clone(),
         temp_dir: std::path::PathBuf::from(&config.temp_path).join("recording"),
         mic_audio_buffer,
         speaker_audio_buffer,
+        mic_capture,
+        speaker_capture,
     };
 
     std::fs::create_dir_all(&flags.temp_dir)?;
@@ -192,13 +231,14 @@ struct ReplayFlags {
     height: u32,
     fps: u32,
     video_bitrate: u32,
-    audio_config: AudioConfig,
     segment_duration_secs: u64,
     replay_buffer: Arc<ReplayBuffer>,
     handle: Arc<Mutex<ReplayBufferHandle>>,
     temp_dir: std::path::PathBuf,
-    mic_audio_buffer: Arc<Mutex<CircularAudioBuffer>>,
-    speaker_audio_buffer: Arc<Mutex<CircularAudioBuffer>>,
+    mic_audio_buffer: Option<Arc<Mutex<CircularAudioBuffer>>>,
+    speaker_audio_buffer: Option<Arc<Mutex<CircularAudioBuffer>>>,
+    mic_capture: Option<AudioCapture>,
+    speaker_capture: Option<AudioCapture>,
 }
 
 struct ReplayScreenRecorder {
@@ -209,8 +249,8 @@ struct ReplayScreenRecorder {
 
     mic_capture: Option<AudioCapture>,
     speaker_capture: Option<AudioCapture>,
-    mic_audio_buffer: Arc<Mutex<CircularAudioBuffer>>,
-    speaker_audio_buffer: Arc<Mutex<CircularAudioBuffer>>,
+    mic_audio_buffer: Option<Arc<Mutex<CircularAudioBuffer>>>,
+    speaker_audio_buffer: Option<Arc<Mutex<CircularAudioBuffer>>>,
 
     segment_wall_start: Instant,
     segment_duration: Duration,
@@ -252,27 +292,9 @@ impl GraphicsCaptureApiHandler for ReplayScreenRecorder {
             &segment_path,
         )?;
 
-        let init_capture = |idx: Option<usize>| -> Option<AudioCapture> {
-            if let Some(device_idx) = idx {
-                let config = AudioCaptureConfig {
-                    sample_rate: flags.audio_config.sample_rate,
-                    channels: flags.audio_config.channels,
-                    enabled: true,
-                };
-                match AudioCapture::new(Some(device_idx), config) {
-                    Ok(capture) => Some(capture),
-                    Err(e) => {
-                        log::error!("Failed to init audio source: {}", e);
-                        None
-                    }
-                }
-            } else {
-                None
-            }
-        };
-
-        let mic_capture = init_capture(flags.audio_config.mic_device_index);
-        let speaker_capture = init_capture(flags.audio_config.speaker_device_index);
+        // Audio captures were already initialized in start_replay_buffer
+        let mic_capture = flags.mic_capture;
+        let speaker_capture = flags.speaker_capture;
 
         let now = Instant::now();
         let stop_signal = flags.handle.lock().unwrap().stop_signal();
@@ -324,16 +346,20 @@ impl GraphicsCaptureApiHandler for ReplayScreenRecorder {
         }
 
         if let Some(cap) = &self.mic_capture {
-            while let Some(ts_audio) = cap.try_recv() {
-                if let Ok(mut buf) = self.mic_audio_buffer.try_lock() {
-                    buf.push(&ts_audio.data, ts_audio.callback_time);
+            if let Some(ref buf) = self.mic_audio_buffer {
+                while let Some(ts_audio) = cap.try_recv() {
+                    if let Ok(mut b) = buf.try_lock() {
+                        b.push(&ts_audio.data, ts_audio.callback_time);
+                    }
                 }
             }
         }
         if let Some(cap) = &self.speaker_capture {
-            while let Some(ts_audio) = cap.try_recv() {
-                if let Ok(mut buf) = self.speaker_audio_buffer.try_lock() {
-                    buf.push(&ts_audio.data, ts_audio.callback_time);
+            if let Some(ref buf) = self.speaker_audio_buffer {
+                while let Some(ts_audio) = cap.try_recv() {
+                    if let Ok(mut b) = buf.try_lock() {
+                        b.push(&ts_audio.data, ts_audio.callback_time);
+                    }
                 }
             }
         }
@@ -354,7 +380,9 @@ impl GraphicsCaptureApiHandler for ReplayScreenRecorder {
                 if self.frames_dropped > 0 {
                     log::debug!(
                         "Buffer: {:.1}s ({} segments) | Dropped: {} frames",
-                        duration, segments, self.frames_dropped
+                        duration,
+                        segments,
+                        self.frames_dropped
                     );
                 } else {
                     log::debug!("Buffer: {:.1}s ({} segments)", duration, segments);

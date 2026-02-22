@@ -97,14 +97,14 @@ type MonitorInfo struct {
 }
 
 type AudioDeviceInfo struct {
-	Index   int    `json:"index"`
-	Name    string `json:"name"`
-	IsInput bool   `json:"is_input"`
+	Index      int    `json:"index"`
+	Name       string `json:"name"`
+	IsInput    bool   `json:"is_input"`
+	SampleRate uint32 `json:"sample_rate"`
+	Channels   uint16 `json:"channels"`
 }
 
 type AudioConfig struct {
-	SampleRate         uint32  `json:"sample_rate"`
-	Channels           uint16  `json:"channels"`
 	MicDeviceIndex     *int    `json:"mic_device_index"`
 	MicVolume          float32 `json:"mic_volume"`
 	SpeakerDeviceIndex *int    `json:"speaker_device_index"`
