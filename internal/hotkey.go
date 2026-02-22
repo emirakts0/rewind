@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"log/slog"
 	"runtime"
 	"syscall"
@@ -15,6 +16,9 @@ var (
 	procDispatchMessageW = user32.NewProc("DispatchMessageW")
 	procRegisterHotKey   = user32.NewProc("RegisterHotKey")
 	procUnregisterHotKey = user32.NewProc("UnregisterHotKey")
+	procFindWindowW      = user32.NewProc("FindWindowW")
+	procGetWindowLongW   = user32.NewProc("GetWindowLongW")
+	procSetWindowLongW   = user32.NewProc("SetWindowLongW")
 )
 
 const (
@@ -59,19 +63,28 @@ func (h *HotkeyManager) SetupDefaultHotkeys(rewindApp *App) {
 	h.Register(1, func() {
 		if rewindApp.GetRecordingState().Status == StatusRecording {
 			if err := rewindApp.StopRecording(); err != nil {
+				rewindApp.BroadcastNotification("error", "Failed to stop recording", err.Error())
 				slog.Error("Failed to stop recording via hotkey", "error", err)
+			} else {
+				rewindApp.BroadcastNotification("info", "Recording stopped", "Via hotkey")
 			}
 		} else {
 			if err := rewindApp.StartRecording(); err != nil {
+				rewindApp.BroadcastNotification("error", "Failed to start recording", err.Error())
 				slog.Error("Failed to start recording via hotkey", "error", err)
+			} else {
+				rewindApp.BroadcastNotification("success", "Recording started", "Via hotkey")
 			}
 		}
 	})
 
 	// Ctrl+F10: Save Clip
 	h.Register(2, func() {
-		if _, err := rewindApp.SaveCurrentClip(); err != nil {
+		if filename, err := rewindApp.SaveCurrentClip(); err != nil {
+			rewindApp.BroadcastNotification("error", "Failed to save clip", err.Error())
 			slog.Error("Failed to save clip via hotkey", "error", err)
+		} else {
+			rewindApp.BroadcastNotification("success", fmt.Sprintf("Saved: %s", filename), "Clip saved successfully")
 		}
 	})
 }

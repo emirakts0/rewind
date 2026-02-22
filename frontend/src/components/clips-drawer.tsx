@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
-import { toast } from "sonner"
+import { notify } from '@/components/notifications'
 
 export function ClipsDrawer() {
     const [clips, setClips] = useState<Clip[]>([])
@@ -35,7 +35,7 @@ export function ClipsDrawer() {
             setClips(sorted)
         } catch (err) {
             console.error(err)
-            toast.error("Failed to load clips")
+            notify('error', 'Failed to load clips')
         } finally {
             setLoading(false)
         }
@@ -43,7 +43,6 @@ export function ClipsDrawer() {
 
     useEffect(() => {
         if (open) {
-            toast.dismiss()
             fetchClips()
         } else {
             setSelectionMode(false)
@@ -65,7 +64,7 @@ export function ClipsDrawer() {
         try {
             await api.openClip(path)
         } catch (err) {
-            toast.error("Failed to open clip")
+            notify('error', 'Failed to open clip')
         }
     }
 
@@ -73,7 +72,7 @@ export function ClipsDrawer() {
         try {
             await api.openOutputDirectory()
         } catch (err) {
-            toast.error("Failed to open folder")
+            notify('error', 'Failed to open folder')
         }
     }
 
@@ -95,13 +94,13 @@ export function ClipsDrawer() {
         setDeleting(true)
         try {
             await api.deleteClips(Array.from(selectedClips))
-            toast.success(`Deleted ${selectedClips.size} clip${selectedClips.size > 1 ? 's' : ''}`)
+            notify('success', `Deleted ${selectedClips.size} clip${selectedClips.size > 1 ? 's' : ''}`)
             setSelectedClips(new Set())
             setSelectionMode(false)
             setShowDeleteConfirm(false)
             await fetchClips()
         } catch (err: any) {
-            toast.error(err?.message || "Failed to delete clips")
+            notify('error', err?.message || 'Failed to delete clips')
         } finally {
             setDeleting(false)
         }

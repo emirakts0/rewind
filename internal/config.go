@@ -20,21 +20,25 @@ const configFileName = "settings.json"
 
 // Config represents the application configuration
 type Config struct {
-	DisplayIndex       int    `json:"displayIndex"`
-	MonitorName        string `json:"monitorName"` // resolved name of DisplayIndex
-	FPS                int    `json:"fps"`
-	Bitrate            int    `json:"bitrate"`
-	RecordSeconds      int    `json:"recordSeconds"`
-	SegmentDurationSec int    `json:"segmentDurationSec"`
-	OutputDir          string `json:"outputDir"`
-	MicrophoneDevice   int    `json:"microphoneDevice"`
-	MicrophoneName     string `json:"microphoneName"` // resolved name of MicrophoneDevice (-1 → "")
-	SystemAudioDevice  int    `json:"systemAudioDevice"`
-	SystemAudioName    string `json:"systemAudioName"` // resolved name of SystemAudioDevice (-1 → "")
-	MicrophoneVolume   int    `json:"microphoneVolume"`
-	SystemAudioVolume  int    `json:"systemAudioVolume"`
-	ShowCursor         bool   `json:"showCursor"`
-	ShowBorder         bool   `json:"showBorder"`
+	DisplayIndex            int    `json:"displayIndex"`
+	MonitorName             string `json:"monitorName"` // resolved name of DisplayIndex
+	FPS                     int    `json:"fps"`
+	Bitrate                 int    `json:"bitrate"`
+	RecordSeconds           int    `json:"recordSeconds"`
+	SegmentDurationSec      int    `json:"segmentDurationSec"`
+	OutputDir               string `json:"outputDir"`
+	MicrophoneDevice        int    `json:"microphoneDevice"`
+	MicrophoneName          string `json:"microphoneName"` // resolved name of MicrophoneDevice (-1 → "")
+	SystemAudioDevice       int    `json:"systemAudioDevice"`
+	SystemAudioName         string `json:"systemAudioName"` // resolved name of SystemAudioDevice (-1 → "")
+	MicrophoneVolume        int    `json:"microphoneVolume"`
+	SystemAudioVolume       int    `json:"systemAudioVolume"`
+	ShowCursor              bool   `json:"showCursor"`
+	ShowBorder              bool   `json:"showBorder"`
+	NotificationsEnabled    bool   `json:"notificationsEnabled"`
+	NotificationsOnlyErrors bool   `json:"notificationsOnlyErrors"`
+	NotificationsPosition   string `json:"notificationsPosition"`
+	NotificationsDurationMs int    `json:"notificationsDurationMs"`
 }
 
 // DefaultConfig returns a new Config with default values
@@ -45,18 +49,22 @@ func DefaultConfig() Config {
 	}
 
 	return Config{
-		DisplayIndex:       0,
-		FPS:                30,
-		Bitrate:            15,
-		RecordSeconds:      30,
-		SegmentDurationSec: 5,
-		OutputDir:          outputDir,
-		MicrophoneDevice:   -1,
-		SystemAudioDevice:  -1,
-		MicrophoneVolume:   100,
-		SystemAudioVolume:  100,
-		ShowCursor:         true,
-		ShowBorder:         false,
+		DisplayIndex:            0,
+		FPS:                     30,
+		Bitrate:                 15,
+		RecordSeconds:           30,
+		SegmentDurationSec:      5,
+		OutputDir:               outputDir,
+		MicrophoneDevice:        -1,
+		SystemAudioDevice:       -1,
+		MicrophoneVolume:        100,
+		SystemAudioVolume:       100,
+		ShowCursor:              true,
+		ShowBorder:              false,
+		NotificationsEnabled:    true,
+		NotificationsOnlyErrors: false,
+		NotificationsPosition:   "top-left",
+		NotificationsDurationMs: 3000,
 	}
 }
 

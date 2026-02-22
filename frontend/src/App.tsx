@@ -5,14 +5,13 @@ import { formatTime, formatBufferDisplay, getBufferUnit, formatError, cn } from 
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Toaster } from '@/components/ui/sonner'
-import { toast } from "sonner"
 import { BufferSlider, BUFFER_STEPS } from '@/components/buffer-slider'
 import { StatusBadge } from '@/components/status-badge'
 import { ConfigPanel } from '@/components/config-panel'
 import { ClipsDrawer } from '@/components/clips-drawer'
 import { TitleBar } from '@/components/title-bar'
 import { Kbd, KbdGroup } from '@/components/ui/kbd'
+import { notify } from '@/components/notifications'
 
 function App() {
     const [displays, setDisplays] = useState<DisplayInfo[]>([])
@@ -34,6 +33,10 @@ function App() {
         systemAudioVolume: 100,
         showCursor: true,
         showBorder: false,
+        notificationsEnabled: true,
+        notificationsOnlyErrors: false,
+        notificationsPosition: 'top-left',
+        notificationsDurationMs: 3000,
     })
     const [state, setState] = useState<State>({
         status: 'idle',
@@ -92,7 +95,7 @@ function App() {
                     setState(s)
                 }
             } catch (err: any) {
-                toast.error(`Init failed: ${formatError(err)}`)
+                notify('error', `Init failed: ${formatError(err)}`)
             } finally {
                 setLoading(false)
             }
@@ -113,24 +116,15 @@ function App() {
         const unsubRuntimeError = api.Events.On(Events.RUNTIME_ERROR, (event: any) => {
             const { level, message } = event.data as { level: string; message: string }
             if (level === 'error') {
-                toast.error(message, {
-                    description: "Recording error",
-                    duration: 5000,
-                })
+                notify('error', message, 'Recording error')
             } else if (level === 'warning') {
-                toast.warning(message, {
-                    description: "Recording warning",
-                    duration: 4000,
-                })
+                notify('warning', message, 'Recording warning')
             }
         })
 
         const unsubDeviceDisconnected = api.Events.On(Events.DEVICE_DISCONNECTED, (event: any) => {
             const { message } = event.data as { message: string }
-            toast.error(message, {
-                description: "Recording stopped",
-                duration: 6000,
-            })
+            notify('error', message, 'Recording stopped')
         })
 
         const unsubDeviceListChanged = api.Events.On(Events.DEVICE_LIST_CHANGED, async () => {
@@ -147,10 +141,7 @@ function App() {
                 setOutputDevices(outputs || [])
                 setConfig(prev => ({ ...prev, ...cfg }))
 
-                toast.info("Device configuration updated", {
-                    description: "A device was connected or disconnected",
-                    duration: 3000,
-                })
+                notify('info', 'Device configuration updated', 'A device was connected or disconnected')
             } catch (err: any) {
                 console.error("Failed to refresh devices:", err)
             }
@@ -164,19 +155,42 @@ function App() {
         }
     }, [configOpen])
 
+    useEffect(() => {
+        if (!loading && !isRecording) {
+            const timeoutId = setTimeout(() => {
+                api.setConfig(config).catch(err => {
+                    console.error("Failed to auto-save config:", err)
+                })
+            }, 500)
+            return () => clearTimeout(timeoutId)
+        }
+    }, [config, loading, isRecording])
+
+    // Sync wails config to local notification store
+    useEffect(() => {
+        import('@/components/notifications/notification-store').then(m => {
+            m.updateConfig({
+                enabled: config.notificationsEnabled,
+                onlyErrors: config.notificationsOnlyErrors,
+                position: config.notificationsPosition as any,
+                durationMs: config.notificationsDurationMs,
+            })
+        })
+    }, [config.notificationsEnabled, config.notificationsOnlyErrors, config.notificationsPosition, config.notificationsDurationMs])
+
     const handleStart = async () => {
         try {
             await api.setConfig(config)
             await api.start()
-            toast.success("Recording started")
+            notify('success', 'Recording started')
         } catch (err: any) {
             const errorMsg = formatError(err)
-            if (errorMsg.includes("already recording")) {
-                toast.warning("Already recording")
-            } else if (errorMsg.includes("cannot start while saving")) {
-                toast.warning("Please wait for the current save to complete")
+            if (errorMsg.includes('already recording')) {
+                notify('warning', 'Already recording')
+            } else if (errorMsg.includes('cannot start while saving')) {
+                notify('warning', 'Please wait for the current save to complete')
             } else {
-                toast.error(errorMsg)
+                notify('error', errorMsg)
             }
         }
     }
@@ -184,15 +198,15 @@ function App() {
     const handleStop = async () => {
         try {
             await api.stop()
-            toast.info("Recording stopped")
+            notify('info', 'Recording stopped')
         } catch (err: any) {
             const errorMsg = formatError(err)
-            if (errorMsg.includes("not recording")) {
-                toast.warning("Not currently recording")
-            } else if (errorMsg.includes("cannot stop while saving")) {
-                toast.warning("Please wait for the current save to complete")
+            if (errorMsg.includes('not recording')) {
+                notify('warning', 'Not currently recording')
+            } else if (errorMsg.includes('cannot stop while saving')) {
+                notify('warning', 'Please wait for the current save to complete')
             } else {
-                toast.error(errorMsg)
+                notify('error', errorMsg)
             }
         }
     }
@@ -202,23 +216,19 @@ function App() {
 
         try {
             const filename = await api.saveClip()
-            toast.success(`Saved: ${filename}`, {
-                description: "Clip saved successfully"
-            })
+            notify('success', `Saved: ${filename}`, 'Clip saved successfully')
         } catch (err: any) {
             const errorMsg = formatError(err)
-            if (errorMsg.includes("not recording")) {
-                toast.warning("Not currently recording")
-            } else if (errorMsg.includes("save already in progress")) {
-                toast.warning("Save already in progress")
-            } else if (errorMsg.includes("please wait") && errorMsg.includes("seconds")) {
-                toast.warning(errorMsg)
-            } else if (errorMsg.includes("timed out")) {
-                toast.error("Save operation timed out (45s limit)", {
-                    description: "Try reducing buffer size or closing other applications"
-                })
+            if (errorMsg.includes('not recording')) {
+                notify('warning', 'Not currently recording')
+            } else if (errorMsg.includes('save already in progress')) {
+                notify('warning', 'Save already in progress')
+            } else if (errorMsg.includes('please wait') && errorMsg.includes('seconds')) {
+                notify('warning', errorMsg)
+            } else if (errorMsg.includes('timed out')) {
+                notify('error', 'Save operation timed out (45s limit)', 'Try reducing buffer size or closing other applications')
             } else {
-                toast.error(errorMsg)
+                notify('error', errorMsg)
             }
         }
     }
@@ -230,8 +240,8 @@ function App() {
                 setConfig(prev => ({ ...prev, outputDir: path }))
             }
         } catch (err: any) {
-            console.error("Directory selection error:", err)
-            toast.error(formatError(err))
+            console.error('Directory selection error:', err)
+            notify('error', formatError(err))
         }
     }, [])
 
@@ -250,10 +260,10 @@ function App() {
             setOutputDevices(outputs || [])
             setConfig(prev => ({ ...prev, ...cfg }))
 
-            toast.success("Config refreshed")
+            notify('success', 'Config refreshed')
         } catch (err: any) {
-            console.error("Config refresh error:", err)
-            toast.error(formatError(err))
+            console.error('Config refresh error:', err)
+            notify('error', formatError(err))
         }
     }, [])
 
@@ -395,8 +405,6 @@ function App() {
                     )}
                 </div>
             </footer>
-
-            <Toaster position="top-center" />
         </div>
     )
 }

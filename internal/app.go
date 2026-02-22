@@ -47,8 +47,9 @@ type App struct {
 	startTime    time.Time
 	lastSaveTime time.Time
 
-	onTrayStateChange func(State)
-	deviceMonitor     *DeviceMonitor
+	onTrayStateChange  func(State)
+	deviceMonitor      *DeviceMonitor
+	notificationWindow *application.WebviewWindow
 }
 
 // New creates a new App instance
@@ -644,6 +645,67 @@ func isCriticalError(message string) bool {
 		}
 	}
 	return false
+}
+
+// SetNotificationWindow stores the notification window reference
+func (a *App) SetNotificationWindow(win *application.WebviewWindow) {
+	a.notificationWindow = win
+
+	// Hide the notification window from the taskbar by applying WS_EX_TOOLWINDOW
+	go hideWindowFromTaskbar("Rewind Notifications")
+}
+
+// ShowNotificationWindow displays the notification window without stealing focus and positions it
+func (a *App) ShowNotificationWindow(position string) {
+	if a.notificationWindow == nil {
+		return
+	}
+
+	// Use work area (excludes taskbar) for positioning
+	wa, err := getWorkArea()
+	if err != nil {
+		slog.Warn("failed to get work area, falling back to monitor info", "error", err)
+	}
+
+	if err == nil {
+		winWidth := 350
+		winHeight := 600
+
+		x := wa.X
+		y := wa.Y
+
+		switch position {
+		case "top-right":
+			x = wa.X + wa.Width - winWidth
+		case "bottom-left":
+			y = wa.Y + wa.Height - winHeight
+		case "bottom-right":
+			x = wa.X + wa.Width - winWidth
+			y = wa.Y + wa.Height - winHeight
+		}
+
+		a.notificationWindow.SetPosition(x, y)
+	}
+
+	a.notificationWindow.Show()
+}
+
+// HideNotificationWindow hides the notification window
+func (a *App) HideNotificationWindow() {
+	if a.notificationWindow != nil {
+		a.notificationWindow.Hide()
+	}
+}
+
+// BroadcastNotification sends a global notification event to all windows
+func (a *App) BroadcastNotification(nType, title, description string) {
+	if a.app != nil {
+		a.app.Event.Emit("notification:show", map[string]interface{}{
+			"type":        nType,
+			"title":       title,
+			"description": description,
+		})
+	}
 }
 
 // --- DTOs for Wails binding ---

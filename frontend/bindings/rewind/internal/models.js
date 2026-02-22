@@ -10,6 +10,9 @@ import { Create as $Create } from "@wailsio/runtime";
 // @ts-ignore: Unused imports
 import * as time$0 from "../../time/models.js";
 
+/**
+ * Clip represents a saved video clip
+ */
 export class Clip {
     /**
      * Creates a new Clip instance.
@@ -59,6 +62,9 @@ export class Clip {
     }
 }
 
+/**
+ * Config represents the application configuration
+ */
 export class Config {
     /**
      * Creates a new Config instance.
@@ -71,6 +77,14 @@ export class Config {
              * @type {number}
              */
             this["displayIndex"] = 0;
+        }
+        if (!("monitorName" in $$source)) {
+            /**
+             * resolved name of DisplayIndex
+             * @member
+             * @type {string}
+             */
+            this["monitorName"] = "";
         }
         if (!("fps" in $$source)) {
             /**
@@ -114,12 +128,28 @@ export class Config {
              */
             this["microphoneDevice"] = 0;
         }
+        if (!("microphoneName" in $$source)) {
+            /**
+             * resolved name of MicrophoneDevice (-1 → "")
+             * @member
+             * @type {string}
+             */
+            this["microphoneName"] = "";
+        }
         if (!("systemAudioDevice" in $$source)) {
             /**
              * @member
              * @type {number}
              */
             this["systemAudioDevice"] = 0;
+        }
+        if (!("systemAudioName" in $$source)) {
+            /**
+             * resolved name of SystemAudioDevice (-1 → "")
+             * @member
+             * @type {string}
+             */
+            this["systemAudioName"] = "";
         }
         if (!("microphoneVolume" in $$source)) {
             /**

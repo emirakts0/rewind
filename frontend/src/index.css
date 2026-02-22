@@ -76,6 +76,13 @@ body {
   user-select: none;
 }
 
+body[data-notification-window="true"],
+body[data-notification-window="true"] #root,
+html:has(body[data-notification-window="true"]) {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
 
 #root {
   height: 100vh;
@@ -173,45 +180,4 @@ body {
 
   background: hsl(var(--destructive));
   color: white;
-}
-
-
-[data-sonner-toaster] {
-  top: 48px !important;
-}
-
-
-[data-sonner-toast] {
-  background: hsl(var(--muted)) !important;
-  border-color: hsl(var(--border)) !important;
-  color: hsl(var(--foreground)) !important;
-}
-
-[data-sonner-toast] [data-description] {
-  color: hsl(var(--muted-foreground)) !important;
-}
-
-
-[data-sonner-toast][data-type="success"] {
-  background: hsl(152 80% 10%) !important;
-  border-color: hsl(152 60% 25%) !important;
-  color: hsl(152 60% 70%) !important;
-}
-
-[data-sonner-toast][data-type="success"] [data-description] {
-  color: hsl(152 40% 60%) !important;
-}
-
-
-[data-sonner-toast][data-type="error"] {
-  background: hsl(var(--destructive)) !important;
-  border-color: hsl(16 80% 30%) !important;
-  color: hsl(var(--destructive-foreground)) !important;
-}
-
-/* Info toast */
-[data-sonner-toast][data-type="info"] {
-  background: hsl(var(--muted)) !important;
-  border-color: hsl(var(--border)) !important;
-  color: hsl(var(--foreground)) !important;
 }

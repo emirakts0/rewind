@@ -20,6 +20,17 @@ import * as application$0 from "../../github.com/wailsapp/wails/v3/pkg/applicati
 import * as $models from "./models.js";
 
 /**
+ * BroadcastNotification sends a global notification event to all windows
+ * @param {string} nType
+ * @param {string} title
+ * @param {string} description
+ * @returns {$CancellablePromise<void>}
+ */
+export function BroadcastNotification(nType, title, description) {
+    return $Call.ByID(3996292665, nType, title, description);
+}
+
+/**
  * ChooseOutputDirectory opens a directory picker dialog
  * @returns {$CancellablePromise<string>}
  */
@@ -34,6 +45,16 @@ export function ChooseOutputDirectory() {
  */
 export function DeleteClips(paths) {
     return $Call.ByID(548297735, paths);
+}
+
+/**
+ * EmitEvent emits an event to the frontend
+ * @param {string} eventName
+ * @param {any} data
+ * @returns {$CancellablePromise<void>}
+ */
+export function EmitEvent(eventName, data) {
+    return $Call.ByID(1427157544, eventName, data);
 }
 
 /**
@@ -54,6 +75,14 @@ export function GetRecordingState() {
     return $Call.ByID(2091198017).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
+}
+
+/**
+ * HideNotificationWindow is a no-op because hiding suspends the WebView2 context
+ * @returns {$CancellablePromise<void>}
+ */
+export function HideNotificationWindow() {
+    return $Call.ByID(640275912);
 }
 
 /**
@@ -146,12 +175,30 @@ export function SetApp(app) {
 }
 
 /**
+ * SetNotificationWindow stores the notification window reference
+ * @param {application$0.WebviewWindow | null} win
+ * @returns {$CancellablePromise<void>}
+ */
+export function SetNotificationWindow(win) {
+    return $Call.ByID(86434094, win);
+}
+
+/**
  * SetOnStateChange sets a callback for tray state updates
  * @param {any} callback
  * @returns {$CancellablePromise<void>}
  */
 export function SetOnStateChange(callback) {
     return $Call.ByID(1991470825, callback);
+}
+
+/**
+ * ShowNotificationWindow repositions the notification window
+ * @param {string} position
+ * @returns {$CancellablePromise<void>}
+ */
+export function ShowNotificationWindow(position) {
+    return $Call.ByID(2800321085, position);
 }
 
 /**
@@ -170,6 +217,7 @@ export function StopRecording() {
 }
 
 /**
+ * UpdateConfig updates the configuration and saves it
  * @param {$models.Config} cfg
  * @returns {$CancellablePromise<void>}
  */

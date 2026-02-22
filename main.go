@@ -33,7 +33,10 @@ func main() {
 
 	rewindApp := internal.New(ffmpegPath)
 	appInstance := createApplication(rewindApp)
+
 	window := createWindow(appInstance)
+	notifWindow := createNotificationWindow(appInstance)
+	rewindApp.SetNotificationWindow(notifWindow)
 
 	setupTray(appInstance, rewindApp, window)
 	setupHotkeys(rewindApp)
@@ -100,6 +103,22 @@ func createWindow(app *application.App) *application.WebviewWindow {
 	window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 		window.Hide()
 		e.Cancel()
+	})
+
+	return window
+}
+
+func createNotificationWindow(app *application.App) *application.WebviewWindow {
+	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title:          "Rewind Notifications",
+		Width:          350,
+		Height:         600,
+		Frameless:      true,
+		AlwaysOnTop:    true,
+		Hidden:         true,
+		DisableResize:  true,
+		BackgroundType: application.BackgroundTypeTransparent,
+		URL:            "/#/notification",
 	})
 
 	return window

@@ -1,4 +1,4 @@
-import { Settings2, ChevronUp, Monitor, Timer, Sparkles, Folder, Mic, MousePointer2, Square, Film, Info, Settings, Volume2, RefreshCw } from 'lucide-react'
+import { Settings2, ChevronUp, Monitor, Timer, Sparkles, Folder, Mic, MousePointer2, Square, Film, Info, Settings, Volume2, RefreshCw, Bell, Video } from 'lucide-react'
 import { Switch } from "@/components/ui/switch"
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils'
 import type { Config, DisplayInfo } from '@/lib/wails'
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useState } from 'react'
+import { NotificationSettings } from '@/components/notifications'
 
 interface ConfigPanelProps {
     open: boolean
@@ -113,9 +114,19 @@ export function ConfigPanel({
                         </div>
 
                         <Tabs defaultValue="video" className="w-full">
-                            <TabsList className="grid w-full grid-cols-2 mb-2">
-                                <TabsTrigger value="video">Video</TabsTrigger>
-                                <TabsTrigger value="audio">Audio</TabsTrigger>
+                            <TabsList className="grid w-full grid-cols-3 mb-2">
+                                <TabsTrigger value="video" className="gap-1.5">
+                                    <Video className="w-3.5 h-3.5" fill="currentColor" />
+                                    Video
+                                </TabsTrigger>
+                                <TabsTrigger value="audio" className="gap-1.5">
+                                    <Volume2 className="w-3.5 h-3.5" fill="currentColor" />
+                                    Audio
+                                </TabsTrigger>
+                                <TabsTrigger value="notifications" className="gap-1.5">
+                                    <Bell className="w-3.5 h-3.5" fill="currentColor" />
+                                    Alerts
+                                </TabsTrigger>
                             </TabsList>
 
                             <TabsContent value="video" className="space-y-4 animate-in slide-in-from-left-2 duration-300 fade-in-0 mt-0">
@@ -303,6 +314,14 @@ export function ConfigPanel({
                                             onVolumeChange={(vol) => setConfig(prev => ({ ...prev, systemAudioVolume: vol }))}
                                             disabled={disabled}
                                         />
+                                    </div>
+                                </ScrollArea>
+                            </TabsContent>
+
+                            <TabsContent value="notifications" className="animate-in slide-in-from-right-2 duration-300 fade-in-0 mt-0">
+                                <ScrollArea className="h-[280px] -mx-4 w-[calc(100%+2rem)]">
+                                    <div className="px-4 py-2">
+                                        <NotificationSettings disabled={disabled} config={config} setConfig={setConfig} />
                                     </div>
                                 </ScrollArea>
                             </TabsContent>

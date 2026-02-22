@@ -23,6 +23,10 @@ export interface Config {
     systemAudioVolume: number
     showCursor: boolean
     showBorder: boolean
+    notificationsEnabled: boolean
+    notificationsOnlyErrors: boolean
+    notificationsPosition: string
+    notificationsDurationMs: number
 }
 
 export interface Clip {
@@ -111,6 +115,22 @@ export const api = {
 
     async getOutputDevices(): Promise<string[]> {
         return AppBindings.ListAudioOutputDevices()
+    },
+
+    async broadcastNotification(type: string, title: string, description?: string): Promise<void> {
+        return AppBindings.BroadcastNotification(type, title, description || '')
+    },
+
+    async showNotificationWindow(position: string): Promise<void> {
+        return AppBindings.ShowNotificationWindow(position)
+    },
+
+    async hideNotificationWindow(): Promise<void> {
+        return AppBindings.HideNotificationWindow()
+    },
+
+    async broadcastConfigUpdate(config: Record<string, any>): Promise<void> {
+        WailsEvents.Emit('notification:config-updated', config)
     },
 
     Events: {
