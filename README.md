@@ -66,21 +66,6 @@
    - **Portable Version** (`Rewind-Portable.zip`) - Extract and run from anywhere
 3. **Run** the application and it will start minimized to the system tray
 
-## Getting Started
-
-1. **Launch** Rewind - it will appear in your system tray
-2. **Start Recording** with <kbd>Ctrl</kbd> + <kbd>F9</kbd> to begin buffering
-3. **Capture Moments** with <kbd>Ctrl</kbd> + <kbd>F10</kbd> to save the last N seconds
-4. **Find Your Clips** in the clips folder (default: `%APPDATA%\Rewind\clips`)
-
-### Configuration
-
-- **Buffer Duration**: Set how many seconds to keep in memory (default: 30s)
-- **Video Quality**: Adjust FPS (30/60/..) and bitrate.
-- **Audio Sources**: Enable/disable system audio and microphone
-- **Output Location**: Choose where clips are saved
-- **Hardware Encoder**: Select your preferred GPU encoder or use cpu encoding
-
 
 ## Screenshots
 

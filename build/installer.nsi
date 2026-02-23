@@ -1,6 +1,8 @@
 ; Rewind Installer Script
 ; Requires NSIS 3.0+
 
+SetCompressor /SOLID lzma
+
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
 !include "FileFunc.nsh"
