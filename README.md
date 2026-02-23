@@ -1,6 +1,6 @@
 
 <p align="center">
-  <img src="readme/rewind_banner_2.png" alt="Rewind Banner" width="100%">
+  <img src="readme/rewind_banner_2.jpg" alt="Rewind Banner" width="100%">
 </p>
 
 
