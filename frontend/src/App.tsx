@@ -12,6 +12,7 @@ import { ClipsDrawer } from '@/components/clips-drawer'
 import { TitleBar } from '@/components/title-bar'
 import { Kbd, KbdGroup } from '@/components/ui/kbd'
 import { notify } from '@/components/notifications'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 function App() {
     const [displays, setDisplays] = useState<DisplayInfo[]>([])
@@ -309,15 +310,33 @@ function App() {
                             </span>
                         </div>
                     </div>
-                    <Badge variant="outline" className="gap-1.5 px-3 py-1 bg-secondary/30 backdrop-blur-sm border-border/50">
-                        <HardDrive className="w-3 h-3" />
-                        <span className="font-normal opacity-80">
-                            {isRecording
-                                ? `Disk: ${actualDiskDisplay} • RAM: ${actualMemoryDisplay}`
-                                : `Est. Disk: ${estimateDiskDisplay}`
-                            }
-                        </span>
-                    </Badge>
+                    <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <button className="focus:outline-none">
+                                    <Badge variant="outline" className="gap-1.5 px-3 py-1 bg-secondary/30 backdrop-blur-sm border-border/50 cursor-help">
+                                        <HardDrive className="w-3 h-3" />
+                                        <span className="font-normal opacity-80">
+                                            {isRecording
+                                                ? `Disk: ${actualDiskDisplay} • RAM: ${actualMemoryDisplay}`
+                                                : `Est. Disk: ${estimateDiskDisplay}`
+                                            }
+                                        </span>
+                                    </Badge>
+                                </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[220px] text-[10px]">
+                                {isRecording ? (
+                                    <div className="space-y-1">
+                                        <p><span className="font-semibold">Disk:</span> Space used by MP4 video segments</p>
+                                        <p><span className="font-semibold">RAM:</span> Memory used by audio buffers</p>
+                                    </div>
+                                ) : (
+                                    <p>Estimated disk space for MP4 video segments based on current settings</p>
+                                )}
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
                 </div>
 
                 <div className={cn(

@@ -40,6 +40,7 @@
 - **System Tray Integration** - Runs silently in the background with quick access via tray icon
 - **Global Hotkeys** - Control recording without leaving your current application
 - **Configurable Quality** - Adjustable FPS, bitrate, and buffer duration
+- **In-App Notifications** - Custom toast notifications for recording events and errors with configurable position and duration
 - **Modern Interface** - Clean, frameless UI with smooth animations
 - ... and more!
 
@@ -91,8 +92,13 @@
     go install github.com/wailsapp/wails/v3/cmd/wails3@latest
     # Install NSIS for creating Windows installer
     # Download from https://nsis.sourceforge.io/
-    # Download FFmpeg from the Releases page and place it in the bin/ folder.
 ```
+
+### FFmpeg
+
+The FFmpeg executable (`ffmpeg.exe`) should be placed in the `bin/` folder. You can either:
+- Use the pre-built binary, or
+- Build it yourself following the instructions in [bin/ffmpeg-build.md](bin/ffmpeg-build.md)
 
 ### Build Steps
 
