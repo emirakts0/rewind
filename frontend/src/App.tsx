@@ -23,7 +23,7 @@ function App() {
         fps: 30,
         bitrate: 15,
         recordSeconds: 30,
-        segmentDurationSec: 5,
+        segmentDurationSec: 2,
         outputDir: './clips',
         microphoneDevice: -1,
         microphoneName: '',

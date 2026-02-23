@@ -54,6 +54,7 @@ func (h *HotkeyManager) Start() {
 }
 
 func (h *HotkeyManager) Stop() {
+	slog.Info("Stopping hotkey manager, unregistering hotkeys...")
 	close(h.quit)
 }
 
@@ -112,6 +113,7 @@ func (h *HotkeyManager) loop() {
 	for {
 		select {
 		case <-h.quit:
+			slog.Info("Hotkey manager loop exiting, cleaning up...")
 			return
 		default:
 			ret, _, _ := procGetMessageW.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)

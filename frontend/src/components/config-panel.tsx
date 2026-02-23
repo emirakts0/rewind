@@ -223,7 +223,6 @@ export function ConfigPanel({
                                                                 <p className="text-muted-foreground">
                                                                     <span className="text-amber-400">Trade-off:</span> The current recording segment isn't saved, so you may lose up to this duration from the moment you hit save.
                                                                 </p>
-                                                                <p className="text-primary text-[9px] pt-0.5">5s recommended for balance</p>
                                                             </div>
                                                         </TooltipContent>
                                                     </Tooltip>
@@ -238,7 +237,7 @@ export function ConfigPanel({
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="2">2 seconds</SelectItem>
-                                                    <SelectItem value="5">5 seconds (balanced)</SelectItem>
+                                                    <SelectItem value="5">5 seconds</SelectItem>
                                                     <SelectItem value="10">10 seconds</SelectItem>
                                                 </SelectContent>
                                             </Select>

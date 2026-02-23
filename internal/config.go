@@ -53,7 +53,7 @@ func DefaultConfig() Config {
 		FPS:                     30,
 		Bitrate:                 15,
 		RecordSeconds:           30,
-		SegmentDurationSec:      5,
+		SegmentDurationSec:      2,
 		OutputDir:               outputDir,
 		MicrophoneDevice:        -1,
 		SystemAudioDevice:       -1,

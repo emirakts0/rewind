@@ -14,12 +14,13 @@ import (
 var logFile *lumberjack.Logger
 
 func SetDefaultLogging() {
-	logPath, err := GetLogsDir()
+	logsDir, err := GetLogsDir()
 	if err != nil {
 		log.Printf("Failed to get logs directory: %v", err)
-		logPath = "rewind.log" // Fallback
+		logsDir = "."
 	}
 
+	logPath := filepath.Join(logsDir, "rewind.log")
 	if err := SetupLogging(logPath, true); err != nil {
 		log.Printf("Failed to setup logging: %v", err)
 	}

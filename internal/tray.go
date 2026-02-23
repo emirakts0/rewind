@@ -114,7 +114,6 @@ func (t *TrayManager) createMenu() {
 
 	quitItem := t.menu.Add("Quit Rewind")
 	quitItem.OnClick(func(ctx *application.Context) {
-		t.rewindApp.ServiceShutdown()
 		t.app.Quit()
 	})
 

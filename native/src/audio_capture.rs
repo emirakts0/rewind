@@ -33,7 +33,7 @@ pub fn list_audio_devices() -> Result<Vec<AudioDeviceInfo>, Box<dyn std::error::
                 if let Ok(cfg) = device.default_input_config() {
                     devices.push(AudioDeviceInfo {
                         index: i,
-                        name: format!("{} ({} Hz)", desc.name(), cfg.sample_rate()),
+                        name: format!("{}", desc.name()),
                         is_input: true,
                         sample_rate: cfg.sample_rate(),
                         channels: cfg.channels(),
@@ -52,7 +52,7 @@ pub fn list_audio_devices() -> Result<Vec<AudioDeviceInfo>, Box<dyn std::error::
                 if let Ok(cfg) = device.default_output_config() {
                     devices.push(AudioDeviceInfo {
                         index: i,
-                        name: format!("{} ({} Hz)", desc.name(), cfg.sample_rate()),
+                        name: format!("{}", desc.name()),
                         is_input: false,
                         sample_rate: cfg.sample_rate(),
                         channels: cfg.channels(),

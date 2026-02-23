@@ -179,7 +179,7 @@ func GetMonitors() ([]MonitorInfo, error) {
 		monitors[i].Name = fmt.Sprintf("%s (%dx%d)", baseName, monitors[i].Width, monitors[i].Height)
 	}
 
-	slog.Info("monitors listed", "count", len(monitors))
+	slog.Info("monitors listed", "count", len(monitors), "monitors", monitors)
 	return monitors, nil
 }
 
@@ -218,7 +218,7 @@ func ListAudioDevices() ([]AudioDeviceInfo, error) {
 		return nil, fmt.Errorf("failed to parse audio devices data: %v", err)
 	}
 
-	slog.Info("audio devices listed", "count", len(devices))
+	slog.Info("audio devices listed", "count", len(devices), "devices", devices)
 	return devices, nil
 }
 
