@@ -85,13 +85,13 @@
 ### Prerequisites
 
 ```bash
-    # Install Go (1.21+)
-    # Install Node.js (18+)
-    # Install Wails CLI
-    # Install Rust (latest stable)
-    go install github.com/wailsapp/wails/v3/cmd/wails3@latest
-    # Install NSIS for creating Windows installer
-    # Download from https://nsis.sourceforge.io/
+  # Install Go (1.21+)
+  # Install Node.js (18+)
+  # Install Wails CLI
+  # Install Rust (latest stable)
+  go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+  # Install NSIS for creating Windows installer
+  # Download from https://nsis.sourceforge.io/
 ```
 
 ### FFmpeg
